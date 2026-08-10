@@ -34,40 +34,30 @@ export const widthDeltaVar = '--_number-flow-d-width'
 export const dxVar = '--_number-flow-dx'
 export const deltaVar = '--_number-flow-d'
 
-export const supportsAtProperty = (() => {
+// Register one at a time: a name another copy of this library already
+// registered throws InvalidModificationError, which still means the browser
+// supports @property. Registering them as one batch would let that throw
+// mask real support and silently downgrade us to the rAF engine.
+const registerProperty = (definition: PropertyDefinition) => {
   try {
-    CSS.registerProperty({
-      name: opacityDeltaVar,
-      syntax: '<number>',
-      inherits: false,
-      initialValue: '0',
-    })
-
-    CSS.registerProperty({
-      name: dxVar,
-      syntax: '<length>',
-      inherits: true,
-      initialValue: '0px',
-    })
-
-    CSS.registerProperty({
-      name: widthDeltaVar,
-      syntax: '<number>',
-      inherits: false,
-      initialValue: '0',
-    })
-
-    CSS.registerProperty({
-      name: deltaVar,
-      syntax: '<number>',
-      inherits: true,
-      initialValue: '0',
-    })
+    CSS.registerProperty(definition)
     return true
-  } catch {
-    return false
+  } catch (e) {
+    return (e as DOMException | undefined)?.name === 'InvalidModificationError'
   }
-})()
+}
+
+export const supportsAtProperty = [
+  {
+    name: opacityDeltaVar,
+    syntax: '<number>',
+    inherits: false,
+    initialValue: '0',
+  },
+  {name: dxVar, syntax: '<length>', inherits: true, initialValue: '0px'},
+  {name: widthDeltaVar, syntax: '<number>', inherits: false, initialValue: '0'},
+  {name: deltaVar, syntax: '<number>', inherits: true, initialValue: '0'},
+].every(registerProperty)
 
 // Don't use CSS.registerProperty for vars needed during SSR:
 
