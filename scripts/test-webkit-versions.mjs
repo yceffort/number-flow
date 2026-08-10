@@ -1,0 +1,176 @@
+// 구버전 Safari(WebKit) 테스트 러너.
+// Playwright는 릴리스마다 특정 WebKit 빌드를 고정 배포하므로,
+// 구버전 Playwright를 격리 설치해 해당 시절의 WebKit을 같은 버전의 드라이버로 구동한다.
+//
+// 사용법:
+//   node scripts/test-webkit-versions.mjs             # 기본: Safari 16.4/17.4/18.2 상당 자동 검증
+//   node scripts/test-webkit-versions.mjs 17          # Safari 버전 또는 Playwright 버전으로 지정
+//   node scripts/test-webkit-versions.mjs --open 17   # 사람이 볼 수 있게 창을 띄워 비교 데모 열기
+//   node scripts/test-webkit-versions.mjs --list      # 가능한 버전 목록과 Safari 매칭 출력
+//
+// 참고: WebKit 16.0(pw≤1.27) 빌드는 현재 macOS에서 행이 걸려 제외.
+// 각 버전은 자식 프로세스에서 실행하고 타임아웃 시 강제 종료한다.
+
+import {execFileSync, spawn} from 'node:child_process'
+import {existsSync, mkdirSync} from 'node:fs'
+import {createRequire} from 'node:module'
+import {join} from 'node:path'
+import {fileURLToPath} from 'node:url'
+
+import {buildDistIfNeeded, serveDist, CACHE} from './snapshot-utils.mjs'
+
+const SELF = fileURLToPath(import.meta.url)
+const DEFAULT_TARGETS = ['1.33.0', '1.40.0', '1.49.0']
+const PORT = 5298
+
+// Safari 버전 → 그 WebKit을 고정 배포한 Playwright 버전.
+// (실제 WebKit 버전은 실행 시 browser.version()으로 다시 출력됨)
+const SAFARI_MAP = {
+  16: {pw: '1.33.0', webkit: '16.4'},
+  16.4: {pw: '1.33.0', webkit: '16.4'},
+  17: {pw: '1.40.0', webkit: '17.4'},
+  '17.0': {pw: '1.36.0', webkit: '17.0'},
+  17.4: {pw: '1.40.0', webkit: '17.4'},
+  18: {pw: '1.49.0', webkit: '18.2'},
+  '18.0': {pw: '1.48.0', webkit: '18.0'},
+  18.2: {pw: '1.49.0', webkit: '18.2'},
+}
+// Safari 버전(16, 17.4 등)이면 매핑, 아니면 Playwright 버전으로 간주:
+const resolveTarget = (v) => SAFARI_MAP[v]?.pw ?? v
+
+function printList() {
+  console.log('열 수 있는 Safari(WebKit) 버전 — pnpm open:webkit <버전>:')
+  console.log(
+    '  16 / 16.4  → WebKit 16.4 (playwright 1.33) — iOS/macOS Safari 16.4 상당',
+  )
+  console.log('  17.0       → WebKit 17.0 (playwright 1.36)')
+  console.log('  17 / 17.4  → WebKit 17.4 (playwright 1.40)')
+  console.log('  18.0       → WebKit 18.0 (playwright 1.48)')
+  console.log('  18 / 18.2  → WebKit 18.2 (playwright 1.49)')
+  console.log('  최신(26.x)  → npx playwright test --headed --project=webkit')
+  console.log(
+    '  ※ Safari 16.0~16.3(playwright ≤1.31)은 현재 macOS에서 실행이 멈춰 지원 불가',
+  )
+  console.log('  ※ Playwright 버전을 직접 넘겨도 됨: pnpm open:webkit 1.36.0')
+}
+
+function ensurePlaywright(version) {
+  const dir = join(CACHE, `pw-${version}`)
+  const pkg = join(dir, 'node_modules/playwright')
+  if (!existsSync(pkg)) {
+    console.log(`  playwright@${version} 설치 중...`)
+    mkdirSync(dir, {recursive: true})
+    execFileSync(
+      'npm',
+      ['install', '--prefix', dir, '--no-save', `playwright@${version}`],
+      {
+        stdio: ['ignore', 'ignore', 'inherit'],
+      },
+    )
+  }
+  // 해당 버전이 고정한 WebKit 빌드 다운로드 (공유 캐시라 중복 다운로드 없음):
+  execFileSync('node', [join(pkg, 'cli.js'), 'install', 'webkit'], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+  })
+  const require = createRequire(join(dir, 'node_modules/'))
+  return require('playwright')
+}
+
+// --- 자식 모드: 한 버전을 headless로 검증 ---
+async function runOne(version, port) {
+  const pw = ensurePlaywright(version)
+  const browser = await pw.webkit.launch()
+  const wkVersion = browser.version()
+  let failed = 0
+  for (const engine of ['auto', 'raf']) {
+    let page
+    try {
+      page = await browser.newPage()
+      await page.goto(
+        `http://localhost:${port}/selftest.html${engine === 'raf' ? '?engine=raf' : ''}`,
+        {timeout: 20_000},
+      )
+      await page.waitForFunction(() => window.__nfResults, null, {
+        timeout: 30_000,
+      })
+      const res = await page.evaluate(() => window.__nfResults)
+      const fails = res.results.filter((r) => !r.pass)
+      console.log(
+        `  [WebKit ${wkVersion}/${engine}] ${res.pass ? 'PASS' : 'FAIL'} — 감지된 경로: ${res.env.supportsNativeAnimations ? '네이티브 WAAPI' : 'rAF 폴백'}, 검증 ${res.results.length}건 중 실패 ${fails.length}건`,
+      )
+      if (res.fatal) console.log(`    fatal: ${res.fatal}`)
+      fails.forEach((f) =>
+        console.log(`    ✗ ${f.name} (${JSON.stringify(f.detail)})`),
+      )
+      if (!res.pass) failed++
+    } catch (e) {
+      failed++
+      console.log(
+        `  [WebKit ${wkVersion}/${engine}] 실행 실패: ${String(e).slice(0, 200)}`,
+      )
+    } finally {
+      await page?.close().catch(() => {})
+    }
+  }
+  await browser.close().catch(() => {})
+  process.exit(failed ? 1 : 0)
+}
+
+// --- 사람이 보는 모드: 창을 띄워 비교 데모를 연다 ---
+async function open(version) {
+  buildDistIfNeeded()
+  const pw = ensurePlaywright(version)
+  const server = await serveDist(PORT)
+  const browser = await pw.webkit.launch({headless: false})
+  console.log(
+    `WebKit ${browser.version()} 창을 엽니다 → http://localhost:${PORT}/`,
+  )
+  console.log('(창을 닫으면 종료됩니다)')
+  const page = await browser.newPage()
+  await page.goto(`http://localhost:${PORT}/`)
+  browser.on('disconnected', () => {
+    server.close()
+    process.exit(0)
+  })
+}
+
+// --- main ---
+const argv = process.argv.slice(2)
+if (argv[0] === '--one') {
+  await runOne(argv[1], Number(argv[2]))
+} else if (argv[0] === '--open') {
+  if (!argv[1]) printList()
+  await open(resolveTarget(argv[1] ?? '16'))
+} else if (argv[0] === '--list') {
+  printList()
+  process.exit(0)
+} else {
+  const targets = argv.length ? argv.map(resolveTarget) : DEFAULT_TARGETS
+  buildDistIfNeeded()
+  const server = await serveDist(PORT)
+  console.log(`정적 서버: http://localhost:${PORT}`)
+
+  let failed = 0
+  for (const version of targets) {
+    console.log(`\n=== playwright@${version} (WebKit) ===`)
+    // 구형 WebKit 빌드가 행이 걸려도 전체가 멈추지 않도록 자식 프로세스 + 타임아웃:
+    const code = await new Promise((resolve) => {
+      const child = spawn('node', [SELF, '--one', version, String(PORT)], {
+        stdio: 'inherit',
+      })
+      const killer = setTimeout(() => {
+        console.log(
+          '  SKIP: 5분 타임아웃 — 이 WebKit 빌드는 현재 macOS와 비호환일 수 있음',
+        )
+        child.kill('SIGKILL')
+      }, 300_000)
+      child.on('close', (c) => {
+        clearTimeout(killer)
+        resolve(c ?? 1)
+      })
+    })
+    if (code !== 0) failed++
+  }
+  server.close()
+  process.exit(failed ? 1 : 0)
+}
