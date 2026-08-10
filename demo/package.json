@@ -7,7 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@number-flow/react": "latest",
+    "@number-flow/react": "^0.6.2",
     "@yceffort/number-flow": "workspace:*",
     "@yceffort/number-flow-react": "workspace:*",
     "number-flow": "^0.6.2",
