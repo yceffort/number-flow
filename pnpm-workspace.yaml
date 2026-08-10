@@ -2,3 +2,4 @@ packages:
   - packages/*
   - demo
   - ssr-smoke
+  - storybook

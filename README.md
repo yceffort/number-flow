@@ -3,6 +3,9 @@
 [![CI](https://github.com/yceffort/number-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/yceffort/number-flow/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@yceffort/number-flow)](https://www.npmjs.com/package/@yceffort/number-flow)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE.md)
+[![Storybook](https://img.shields.io/badge/Storybook-live-ff4785?logo=storybook&logoColor=white)](https://yceffort.github.io/number-flow/)
+
+**라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/실시간 티커/인터럽트/rAF 폴백 강제/그룹/continuous 스토리를 직접 조작해볼 수 있습니다.
 
 > **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅·DOM 구조·스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체해 **구형 브라우저에서도 동일한 애니메이션이 동작**하도록 확장했습니다.
 
