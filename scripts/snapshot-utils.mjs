@@ -8,9 +8,12 @@ import {
   rmSync,
 } from 'node:fs'
 import {createServer} from 'node:http'
-import {join, extname, normalize} from 'node:path'
+import {join, extname, normalize, sep} from 'node:path'
+import {fileURLToPath} from 'node:url'
 
-export const ROOT = new URL('..', import.meta.url).pathname
+// fileURLToPath, not .pathname: the latter stays percent-encoded, so any
+// space or non-ASCII character in the repo path would break every join below.
+export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 export const DIST = join(ROOT, 'demo/dist')
 export const CACHE = join(ROOT, '.browsers')
 const SNAPSHOT_BASE =
@@ -152,7 +155,8 @@ export function serveDist(port) {
     if (path === '/hold') return
     if (path === '/') path = '/index.html'
     const file = join(DIST, path)
-    if (!file.startsWith(DIST) || !existsSync(file)) {
+    // startsWith(DIST + sep), so a sibling like demo/dist-foo can't slip past:
+    if (!file.startsWith(DIST + sep) || !existsSync(file)) {
       res.writeHead(404).end()
       return
     }
