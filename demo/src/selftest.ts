@@ -150,6 +150,14 @@ async function run() {
     root.querySelectorAll('.digit__num:not([inert])'),
   ).filter((n) => !IDENTITY.test(getComputedStyle(n).transform)).length
   const midNumberT = getComputedStyle(numberEl).transform
+  // 새로 등장하는 문자는 fade-in 중이어야 한다. 나가는 문자([inert])는 인라인
+  // 선언이 따로 있어 원래 동작하므로, 들어오는 쪽만 센다:
+  const midFadingIn = Array.from(
+    root.querySelectorAll('.animate-presence:not([inert])'),
+  ).filter((el) => {
+    const o = parseFloat(getComputedStyle(el).opacity)
+    return o > 0 && o < 1
+  }).length
   // 마스크는 --width가 세팅되는 첫 애니메이션부터 유효해진다 (원본과 동일한 동작):
   const midMask =
     getComputedStyle(numberEl).getPropertyValue('-webkit-mask-image')
@@ -174,6 +182,7 @@ async function run() {
     !IDENTITY.test(midNumberT),
     midNumberT,
   )
+  assert('scenario1 new chars fade in mid-flight', midFadingIn > 0, midFadingIn)
   assertClean('scenario1 end')
   assert('scenario1 text', currentText() === '135,801.6', currentText())
 
