@@ -72,3 +72,32 @@ jobs:
 
       - name: Selftest on real Chromium 66 / 80 / 114 (Linux snapshots)
         run: node scripts/test-old-chrome.mjs 66 80 114
+
+  # 구버전 WebKit(Safari 16.4 / 17.4 / 18.2)까지 훑는다.
+  # Safari 17.4+ 네이티브 경로에는 알려진 미해결 결함이 있어(README의 "Known
+  # issues" 참고) 아직 실패한다. 회귀를 눈에 보이게 두되 파이프라인은 막지 않는다:
+  old-webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Install webkit system libraries
+        run: npx playwright install-deps webkit
+
+      - name: Selftest on WebKit 16.4 / 17.4 / 18.2
+        run: pnpm test:webkit
