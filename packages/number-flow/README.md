@@ -14,3 +14,7 @@ import '@yceffort/number-flow'
 React는 [`@yceffort/number-flow-react`](https://www.npmjs.com/package/@yceffort/number-flow-react)를 사용하세요.
 
 자세한 동작 방식·브라우저 지원 매트릭스·테스트 방법은 [저장소 README](https://github.com/yceffort/number-flow)를 참고하세요.
+
+## 라이선스
+
+[MIT](https://github.com/yceffort/number-flow/blob/main/LICENSE.md). 원본 [number-flow](https://github.com/barvian/number-flow) © [Maxwell Barvian](https://barvian.me).

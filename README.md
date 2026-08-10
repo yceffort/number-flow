@@ -110,4 +110,4 @@ Safari 16.0~16.3(playwright ≤1.31) 빌드는 현재 macOS에서 실행이 멈�
 
 ## 라이선스
 
-MIT. 원본 number-flow © Maxwell Barvian.
+[MIT](./LICENSE.md). 원본 [number-flow](https://github.com/barvian/number-flow) © [Maxwell Barvian](https://barvian.me) — [원본 라이선스](https://github.com/barvian/number-flow/blob/main/LICENSE.md).

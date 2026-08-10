@@ -20,3 +20,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 ```
 
 자세한 내용은 [저장소 README](https://github.com/yceffort/number-flow)를 참고하세요.
+
+## 라이선스
+
+[MIT](https://github.com/yceffort/number-flow/blob/main/LICENSE.md). 원본 [@number-flow/react](https://github.com/barvian/number-flow) © [Maxwell Barvian](https://barvian.me).
