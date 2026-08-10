@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>number-flow-anywhere selftest</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        font-size: 2rem;
+      }
+      pre {
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <pre id="out">running...</pre>
+    <script>
+      // Chrome <76용: vite preload helper가 쓰는 Promise.allSettled 폴리필
+      // (라이브러리 자체는 사용하지 않음 — 데모 인프라 전용):
+      if (!Promise.allSettled) {
+        Promise.allSettled = function (promises) {
+          return Promise.all(
+            promises.map(function (p) {
+              return Promise.resolve(p).then(
+                function (value) {
+                  return {status: 'fulfilled', value: value}
+                },
+                function (reason) {
+                  return {status: 'rejected', reason: reason}
+                },
+              )
+            }),
+          )
+        }
+      }
+    </script>
+    <script type="module" src="/src/selftest.ts"></script>
+  </body>
+</html>
