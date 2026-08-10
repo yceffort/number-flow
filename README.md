@@ -1,5 +1,9 @@
 # @yceffort/number-flow
 
+[![CI](https://github.com/yceffort/number-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/yceffort/number-flow/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@yceffort/number-flow)](https://www.npmjs.com/package/@yceffort/number-flow)
+[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE.md)
+
 > **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅·DOM 구조·스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체해 **구형 브라우저에서도 동일한 애니메이션이 동작**하도록 확장했습니다.
 
 원본은 `linear()` easing(Safari 17.2+/Chrome 113+), CSS `mod()`/`round()`(Safari 15.4+/Chrome 125+), `@property`가 모두 지원될 때만 애니메이션을 켜고, 하나라도 없으면 숫자가 즉시 교체됩니다. 이 포크는 그 세 가지가 없어도 rAF 기반 폴백 엔진으로 동일한 스프링 애니메이션을 재현합니다.
