@@ -1,0 +1,81 @@
+{
+  "name": "@yceffort/number-flow",
+  "version": "0.1.0",
+  "description": "Fork of number-flow with extended browser support: hybrid WAAPI/rAF animation engine that keeps animations working down to Chrome ~70 and iOS ~13.",
+  "author": {
+    "name": "yceffort",
+    "url": "https://yceffort.kr"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/yceffort/number-flow",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yceffort/number-flow",
+    "directory": "packages/number-flow"
+  },
+  "bugs": {
+    "url": "https://github.com/yceffort/number-flow/issues"
+  },
+  "keywords": [
+    "accessible",
+    "odometer",
+    "animation",
+    "number-format",
+    "number-animation",
+    "animated-number",
+    "number-flow"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./lite": {
+      "types": "./dist/lite.d.ts",
+      "import": "./dist/lite.js",
+      "require": "./dist/lite.cjs"
+    },
+    "./csp": {
+      "types": "./dist/csp.d.ts",
+      "import": "./dist/csp.js",
+      "require": "./dist/csp.cjs"
+    },
+    "./group": {
+      "types": "./dist/group.d.ts",
+      "import": "./dist/group.js",
+      "require": "./dist/group.cjs"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.js",
+      "require": "./dist/plugins/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "esm-env": "^1.1.4"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}
