@@ -55,7 +55,24 @@ type NumberFlowImplProps = BaseProps & {
 // You're supposed to cache these between uses:
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toLocaleString
 // Serialize to strings b/c React:
-const formatters: Record<string, Intl.NumberFormat> = {}
+const formatters = new Map<string, Intl.NumberFormat>()
+// Bounded, because format options can legitimately vary per value (e.g. a
+// maximumFractionDigits derived from the number itself), and this module-level
+// cache would otherwise grow for the lifetime of the page:
+const FORMATTERS_MAX = 64
+
+const getFormatter = (
+  key: string,
+  locales?: Intl.LocalesArgument,
+  format?: Format,
+) => {
+  let formatter = formatters.get(key)
+  if (!formatter) {
+    if (formatters.size >= FORMATTERS_MAX) formatters.clear()
+    formatters.set(key, (formatter = new Intl.NumberFormat(locales, format)))
+  }
+  return formatter
+}
 
 // Tiny workaround to support React 19 until it's released:
 function identity<T>(v: T) {
@@ -246,8 +263,11 @@ const NumberFlow = React.forwardRef<NumberFlowElement, NumberFlowProps>(
       [format],
     )
     const data = React.useMemo(() => {
-      const formatter = (formatters[`${localesString}:${formatString}`] ??=
-        new Intl.NumberFormat(locales, format))
+      const formatter = getFormatter(
+        `${localesString}:${formatString}`,
+        locales,
+        format,
+      )
       return formatToData(value, formatter, prefix, suffix)
     }, [value, localesString, formatString, prefix, suffix])
 
