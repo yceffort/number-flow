@@ -86,12 +86,13 @@ real Chromium 66/80/114 binaries.
 ### Verified matrix (all real binaries/engines)
 
 - **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: auto-detects the
-  rAF fallback, 31 assertions PASS
+  rAF fallback, 44 assertions PASS
 - **WebKit 16.4** (≈ iOS/macOS Safari 16.4): auto-detects the rAF fallback,
   PASS — animates where upstream turns animations off
-- **WebKit 17.4 / 18.2**: native path PASS (one width-scale assertion fails
-  **identically on upstream** — a WebKit 17–18 engine quirk, resolved in
-  WebKit 26; passes with rAF forced)
+- **WebKit 17.4 / 18.2**: native path, 42 of 44 PASS — the width-scale and
+  enter-fade assertions fail **identically on upstream**. See
+  [Known issues](#known-issues); fixed in WebKit 26, and passes with rAF
+  forced
 - **Latest Chromium / Firefox / WebKit 26.x**: PASS on both native and
   forced-rAF paths
 - **Next.js 16 (React 19) SSR**: server markup + hydration smoke PASS
@@ -115,6 +116,51 @@ real Chromium 66/80/114 binaries.
   degrades slightly to a plain fade.
 - Vue/Svelte wrappers are not ported yet (the core is identical, so they
   can be added following the upstream wrappers).
+
+## Known issues
+
+**Safari 17.4+ drops the width-scale tween and the enter fade** (upstream
+`number-flow` is affected the same way; this is a WebKit bug, not something
+this fork introduced).
+
+Once **three or more animations run concurrently inside the same shadow
+root**, WebKit stops feeding the animated value of a registered custom
+property into `var()` substitution for other properties on the _same_
+element. `getComputedStyle` still reports the animated value, but style
+resolution uses the static declaration, so:
+
+- `.number`'s `--scale-x: calc(1 + var(--_number-flow-d-width) / var(--width))`
+  resolves as if the delta were `0` → the number never scales while its
+  width changes.
+- `.animate-presence`'s `opacity: calc(1 + var(--_number-flow-d-opacity))`
+  does the same → newly added characters appear without fading in.
+
+Digit spinning is unaffected: `--_number-flow-d` is registered with
+`inherits: true` and is consumed by a _child_ (`.digit__num`), which
+sidesteps the bug. Final values, layout, text and accessibility are all
+correct — only these two mid-flight visual effects are missing.
+
+Three animations is a threshold any real update crosses, so on affected
+versions this is effectively always on. Safari 16.4 and older auto-select
+the rAF fallback and are unaffected, and **WebKit 26 fixes it** — so this
+only bites Safari 17.4 through 18.x.
+
+It cannot be feature-detected synchronously, which is why there is no
+automatic downgrade: setting `Animation.currentTime` by hand resolves
+styles correctly, so a probe never reproduces the bug.
+
+If the missing effects matter more to you than staying on the native path,
+opt into the fallback engine explicitly — it renders both correctly on
+every WebKit version:
+
+```js
+import {setEngineMode} from '@yceffort/number-flow'
+
+setEngineMode('raf') // before any animation starts
+```
+
+`pnpm test:webkit` covers this; CI runs it as a non-blocking `old-webkit`
+job so the two failures stay visible without breaking the pipeline.
 
 ## Development
 
