@@ -60,6 +60,7 @@
     "**/node_modules/**",
     "**/dist/**",
     "**/.browsers/**",
-    "**/test-results/**"
+    "**/test-results/**",
+    "**/storybook-static/**"
   ]
 }

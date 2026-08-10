@@ -17,6 +17,7 @@
     "**/.next/**",
     "**/.browsers/**",
     "**/test-results/**",
+    "**/storybook-static/**",
     "pnpm-lock.yaml",
     "**/*.css"
   ]

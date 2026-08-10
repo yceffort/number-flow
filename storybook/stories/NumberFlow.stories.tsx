@@ -1,3 +1,4 @@
+import type {Meta, StoryObj} from '@storybook/react-vite'
 import NumberFlow, {
   NumberFlowGroup,
   continuous,
@@ -5,8 +6,6 @@ import NumberFlow, {
   supportsNativeAnimations,
 } from '@yceffort/number-flow-react'
 import * as React from 'react'
-
-import type {Meta, StoryObj} from '@storybook/react-vite'
 
 const meta: Meta<typeof NumberFlow> = {
   title: 'NumberFlow',
@@ -192,7 +191,14 @@ export const Continuous_플러그인: Story = {
     return (
       <div style={{textAlign: 'center'}}>
         <NumberFlow {...args} value={value} />
-        <div style={{marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center'}}>
+        <div
+          style={{
+            marginTop: '1rem',
+            display: 'flex',
+            gap: '0.5rem',
+            justifyContent: 'center',
+          }}
+        >
           <button
             style={{fontSize: '1rem', padding: '0.5rem 1rem'}}
             onClick={() => setValue((v) => v + 1)}
