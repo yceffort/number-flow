@@ -1,0 +1,25 @@
+{
+  "name": "yceffort-number-flow-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r --filter='./packages/*' build",
+    "test": "pnpm -r --filter='./packages/*' test",
+    "lint": "oxlint --type-aware",
+    "lint:fix": "oxlint --type-aware --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "e2e": "playwright test",
+    "test:old-chrome": "node scripts/test-old-chrome.mjs",
+    "test:webkit": "node scripts/test-webkit-versions.mjs",
+    "open:old-chrome": "node scripts/open-old-chrome.mjs",
+    "open:webkit": "node scripts/test-webkit-versions.mjs --open",
+    "dev": "pnpm --filter demo dev"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
+    "oxlint-tsgolint": "^7.0.2001"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

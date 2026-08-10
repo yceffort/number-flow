@@ -1,0 +1,65 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "jsx-a11y",
+    "import",
+    "oxc",
+    "unicorn",
+    "nextjs",
+    "promise"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "no-console": ["error", {"allow": ["warn"]}],
+    "react-hooks/exhaustive-deps": "error",
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": "off",
+    "no-underscore-dangle": "off",
+    "typescript/no-unsafe-type-assertion": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/scripts/**"],
+      "rules": {
+        "no-console": "off",
+        "typescript/restrict-template-expressions": "off"
+      }
+    },
+    {
+      "files": ["packages/**"],
+      "rules": {
+        "typescript/no-unsafe-declaration-merging": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/no-non-null-asserted-optional-chain": "off",
+        "typescript/unbound-method": "off",
+        "react-hooks/exhaustive-deps": "off",
+        "promise/no-callback-in-promise": "off",
+        "no-unused-vars": [
+          "error",
+          {
+            "ignoreRestSiblings": true,
+            "varsIgnorePattern": "^_",
+            "argsIgnorePattern": "^_"
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "**/.next/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.browsers/**",
+    "**/test-results/**"
+  ]
+}
