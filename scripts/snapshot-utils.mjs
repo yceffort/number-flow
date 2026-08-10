@@ -20,6 +20,18 @@ export const arm = process.arch === 'arm64'
 export const hasRosetta =
   arm && spawnSync('/usr/bin/arch', ['-x86_64', '/usr/bin/true']).status === 0
 
+// macOS와 Linux(CI) 스냅샷을 모두 지원한다:
+const isMac = process.platform === 'darwin'
+const ZIP_NAME = isMac ? 'chrome-mac.zip' : 'chrome-linux.zip'
+const BIN_RELATIVE = isMac
+  ? 'chrome-mac/Chromium.app/Contents/MacOS/Chromium'
+  : 'chrome-linux/chrome'
+const SNAPSHOT_PLATFORMS = isMac
+  ? arm
+    ? ['Mac_Arm', ...(hasRosetta ? ['Mac'] : [])]
+    : ['Mac']
+  : ['Linux_x64']
+
 // milestone → chromium main branch position (chromiumdash가 안 줄 때의 폴백):
 const FALLBACK_POSITIONS = {
   80: 722274,
@@ -56,7 +68,7 @@ export async function findSnapshot(platform, pos) {
     .filter((r) => r >= pos)
     .sort((a, b) => a - b)
   for (const r of revs.slice(0, 20)) {
-    const url = `${SNAPSHOT_BASE}/${platform}/${r}/chrome-mac.zip`
+    const url = `${SNAPSHOT_BASE}/${platform}/${r}/${ZIP_NAME}`
     const head = await fetch(url, {method: 'HEAD'})
     if (head.ok) return {url, pos: r}
   }
@@ -65,13 +77,13 @@ export async function findSnapshot(platform, pos) {
 
 export async function ensureChromium(milestone) {
   const dir = join(CACHE, `chromium-m${milestone}`)
-  const bin = join(dir, 'chrome-mac/Chromium.app/Contents/MacOS/Chromium')
+  const bin = join(dir, BIN_RELATIVE)
   if (existsSync(bin)) return {bin, cached: true}
 
   const pos = await branchPosition(milestone)
   // ARM 스냅샷은 M92 부근부터만 존재하므로, 요청 위치에 가장 가까운 것을 고른다
   // (구형 마일스톤은 x64 스냅샷 + Rosetta로 실행):
-  const platforms = arm ? ['Mac_Arm', ...(hasRosetta ? ['Mac'] : [])] : ['Mac']
+  const platforms = SNAPSHOT_PLATFORMS
   let snapshot = null
   let usedPlatform = null
   for (const platform of platforms) {
@@ -95,7 +107,7 @@ export async function ensureChromium(milestone) {
     `  다운로드: M${milestone} → ${usedPlatform} r${snapshot.pos} ...`,
   )
   mkdirSync(dir, {recursive: true})
-  const zip = join(dir, 'chrome-mac.zip')
+  const zip = join(dir, ZIP_NAME)
   const buf = Buffer.from(await (await fetch(snapshot.url)).arrayBuffer())
   writeFileSync(zip, buf)
   execFileSync('unzip', ['-oq', zip, '-d', dir])

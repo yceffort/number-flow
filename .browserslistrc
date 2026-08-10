@@ -1,0 +1,6 @@
+# 라이브러리 지원 하한 (rAF 폴백 엔진 기준, 실바이너리 검증 완료 범위)
+chrome >= 66
+safari >= 13
+ios_saf >= 13
+firefox >= 78
+edge >= 79

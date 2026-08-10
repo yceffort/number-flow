@@ -29,6 +29,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Browser API compat check (browserslist)
+        run: pnpm lint:compat
+
       - name: Format check
         run: pnpm format:check
 
@@ -40,3 +43,29 @@ jobs:
 
       - name: E2E (selftest matrix + Next.js SSR smoke)
         run: pnpm e2e
+
+  # 지원 하한을 실제 엔진으로 검증: 정적 compat 검사가 못 잡는 API 격차의 최종 방어선
+  old-chrome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Install chromium system libraries
+        run: npx playwright install-deps chromium
+
+      - name: Selftest on real Chromium 66 / 80 / 114 (Linux snapshots)
+        run: node scripts/test-old-chrome.mjs 66 80 114
