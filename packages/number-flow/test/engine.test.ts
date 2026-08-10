@@ -175,13 +175,39 @@ describe('rAF engine', () => {
     expect(
       (digit.children[5] as HTMLElement).style.getPropertyValue('--y'),
     ).toBe('0%')
-    step(50) // c = 7
-    expect(
-      (digit.children[7] as HTMLElement).style.getPropertyValue('--y'),
-    ).toBe('0%')
+    step(50) // c = 7, and the spin is over
+    // Every --y is handed back to the stylesheet at rest. Leaving them inline
+    // would outrank the CSS formula and misplace the next non-animated value:
+    for (let i = 0; i < 10; i++) {
+      expect(
+        (digit.children[i] as HTMLElement).style.getPropertyValue('--y'),
+      ).toBe('')
+    }
+  })
+
+  it('clears inline --y so a later non-animated value renders in place', () => {
+    const scope = {}
+    const digit = document.createElement('span')
+    digit.style.setProperty('--current', '7')
+    for (let i = 0; i < 10; i++) {
+      const num = document.createElement('span')
+      num.style.setProperty('--n', String(i))
+      digit.appendChild(num)
+    }
+    animate(
+      scope,
+      digit,
+      {[deltaVar]: [-4, 0]},
+      {duration: 100, easing: 'linear'},
+    )
+    step(0)
+    step(100) // settle on 7
+    // Now the value changes with no animation at all (hidden tab, reduced
+    // motion, animated={false}): only --current is updated:
+    digit.style.setProperty('--current', '6')
     expect(
       (digit.children[6] as HTMLElement).style.getPropertyValue('--y'),
-    ).toBe('-100%')
+    ).toBe('') // not the stale '-100%' from the spin
   })
 
   it('supports finish-all and finished promises', async () => {

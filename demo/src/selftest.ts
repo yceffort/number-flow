@@ -230,6 +230,32 @@ async function run() {
   assertClean('scenario4 end')
   assert('scenario4 text', currentText() === '4,242.4', currentText())
 
+  // --- 시나리오 5: 애니메이션이 꺼진 상태의 업데이트 ---
+  // 백그라운드 탭(visibilityState)·모션 최소화·animated=false가 모두 타는 경로다.
+  // 직전 스핀이 남긴 인라인 --y가 정리되지 않으면 여기서 활성 숫자가 한 칸
+  // 밀려나 자릿수가 빈칸으로 보인다:
+  flow.animated = false
+  flow.update(5678.9)
+  await wait(100)
+  assertClean('scenario5 (animated=false)')
+  assert('scenario5 text', currentText() === '5,678.9', currentText())
+
+  // 다시 켜면 애니메이션이 정상 복귀해야 한다:
+  flow.animated = true
+  done = finished()
+  flow.update(1111.1)
+  ok = await done
+  if (!ok) {
+    assert('scenario5 re-enabled animationsfinish fired', false)
+    return report()
+  }
+  assertClean('scenario5 re-enabled')
+  assert(
+    'scenario5 re-enabled text',
+    currentText() === '1,111.1',
+    currentText(),
+  )
+
   report()
 }
 

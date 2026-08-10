@@ -71,14 +71,19 @@ const appliers: Record<string, Applier> = {
     const base = parseFloat(el.style.getPropertyValue(opacityDeltaVar)) || 0
     el.style.opacity = String(clamp(0, 1 + base + total, 1))
   },
-  [deltaVar]: (el, total) => {
+  [deltaVar]: (el, total, idle) => {
     // Digit spin: compute each .digit__num's translateY like the CSS would:
     const current = parseFloat(el.style.getPropertyValue('--current')) || 0
     const length = el.children.length
     const c = current + total
     for (let i = 0; i < length; i++) {
       const child = el.children[i] as HTMLElement
-      child.style.setProperty('--y', `${digitYPercent(c, length, i)}%`)
+      // At rest, hand --y back to the stylesheet. An inline value would
+      // outrank it forever, and the next non-animated `--current` change
+      // (hidden tab, animated={false}, reduced motion) would then render the
+      // active number a full digit-height off:
+      if (idle) child.style.removeProperty('--y')
+      else child.style.setProperty('--y', `${digitYPercent(c, length, i)}%`)
     }
   },
 }
