@@ -55,4 +55,39 @@ describe('parseEasing', () => {
     const fn = parseEasing('bounce(3)')
     expect(fn(0.42)).toBe(0.42)
   })
+
+  it('parses steps() variants', () => {
+    const end = parseEasing('steps(4)')
+    expect(end(0.3)).toBeCloseTo(0.25, 5)
+    const start = parseEasing('steps(4, jump-start)')
+    expect(start(0.3)).toBeCloseTo(0.5, 5)
+    const none = parseEasing('steps(3, jump-none)')
+    expect(none(0.5)).toBeCloseTo(0.5, 5)
+  })
+
+  // steps(1, jump-none) is invalid per spec, and its step/(count-1) would
+  // divide by zero and write NaN into inline styles:
+  it('never produces NaN, including for steps(1, jump-none)', () => {
+    for (const easing of [
+      'steps(1, jump-none)',
+      'steps(0)',
+      'steps(-2)',
+      'linear()',
+      'cubic-bezier(0, 0)',
+      'linear(1)',
+    ]) {
+      const fn = parseEasing(easing)
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        expect(fn(t)).not.toBeNaN()
+      }
+    }
+  })
+
+  it('is stable across repeated calls once the cache resets', () => {
+    // The cache is bounded, so a caller generating easings per value can't
+    // grow it forever — parsing has to stay correct after a reset:
+    for (let i = 0; i < 200; i++) parseEasing(`linear(0, ${i / 200}, 1)`)
+    expect(parseEasing('ease-out')(1)).toBe(1)
+    expect(parseEasing(SPRING)(1)).toBe(1)
+  })
 })

@@ -139,6 +139,9 @@ const KEYWORDS: Record<string, () => EasingFn> = {
 }
 
 const cache = new Map<string, EasingFn>()
+// Easings are near-constant in practice, but a caller generating them per
+// value (e.g. a computed spring) shouldn't be able to grow this forever:
+const CACHE_MAX = 64
 let warned = false
 
 export const parseEasing = (easing?: string): EasingFn => {
@@ -162,7 +165,10 @@ export const parseEasing = (easing?: string): EasingFn => {
       } else if (name === 'steps') {
         const [countStr, pos] = body!.split(',').map((s) => s.trim())
         const count = parseInt(countStr!)
-        if (count > 0) fn = steps(count, pos ?? 'end')
+        // steps(1, jump-none) is invalid per spec, and its step/(count-1)
+        // would divide by zero and write NaN into inline styles:
+        if (count > 0 && !(count === 1 && pos === 'jump-none'))
+          fn = steps(count, pos ?? 'end')
       }
     }
   }
@@ -176,6 +182,7 @@ export const parseEasing = (easing?: string): EasingFn => {
     }
     fn = linear
   }
+  if (cache.size >= CACHE_MAX) cache.clear()
   cache.set(easing, fn)
   return fn
 }
