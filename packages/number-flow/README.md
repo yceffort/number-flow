@@ -1,6 +1,9 @@
 # @yceffort/number-flow
 
-[number-flow](https://github.com/barvian/number-flow)(MIT, © Maxwell Barvian)의 포크로, 하이브리드(WAAPI/rAF) 애니메이션 엔진을 탑재해 **Chrome 66+ / iOS 13+ 수준의 구형 브라우저에서도 동일한 스프링 애니메이션이 동작**합니다. API는 원본 `number-flow`와 드롭인 호환입니다.
+A fork of [number-flow](https://github.com/barvian/number-flow) (MIT, ©
+Maxwell Barvian) with a hybrid (WAAPI/rAF) animation engine, so **the same
+spring animations keep working down to Chrome 66 / iOS ~13**. The API is a
+drop-in match for upstream `number-flow`.
 
 ```bash
 npm install @yceffort/number-flow
@@ -8,13 +11,19 @@ npm install @yceffort/number-flow
 
 ```js
 import '@yceffort/number-flow'
-// <number-flow></number-flow> 커스텀 엘리먼트 사용 (원본과 동일)
+// use the <number-flow></number-flow> custom element (same as upstream)
 ```
 
-React는 [`@yceffort/number-flow-react`](https://www.npmjs.com/package/@yceffort/number-flow-react)를 사용하세요.
+For React, use
+[`@yceffort/number-flow-react`](https://www.npmjs.com/package/@yceffort/number-flow-react).
 
-자세한 동작 방식·브라우저 지원 매트릭스·테스트 방법은 [저장소 README](https://github.com/yceffort/number-flow)를 참고하세요.
+**Live demo**: https://yceffort.github.io/number-flow/
 
-## 라이선스
+See the [repository README](https://github.com/yceffort/number-flow) for how
+it works, the full browser support matrix, and testing instructions.
 
-[MIT](https://github.com/yceffort/number-flow/blob/main/LICENSE.md). 원본 [number-flow](https://github.com/barvian/number-flow) © [Maxwell Barvian](https://barvian.me).
+## License
+
+[MIT](https://github.com/yceffort/number-flow/blob/main/LICENSE.md).
+Original [number-flow](https://github.com/barvian/number-flow) ©
+[Maxwell Barvian](https://barvian.me).
