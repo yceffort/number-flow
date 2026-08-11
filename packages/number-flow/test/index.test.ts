@@ -69,6 +69,30 @@ describe('NumberFlow.update', () => {
     expect(el.getAttribute('aria-label')).toBe('1.234,5')
   })
 
+  // Regression: Intl.Locale instances have no own enumerable properties, so
+  // JSON.stringify collapses every one of them to '{}' — switching locales
+  // never rebuilt the formatter:
+  it('rebuilds the formatter when an Intl.Locale locale changes', () => {
+    const el = create()
+    el.locales = new Intl.Locale('en-US')
+    el.update(1234.5)
+    expect(el.getAttribute('aria-label')).toBe('1,234.5')
+
+    el.locales = new Intl.Locale('de-DE')
+    el.update(1234.5)
+    expect(constructed).toBe(2)
+    expect(el.getAttribute('aria-label')).toBe('1.234,5')
+  })
+
+  it('reuses the formatter across equal Intl.Locale instances', () => {
+    const el = create()
+    el.locales = new Intl.Locale('en-US')
+    el.update(1)
+    el.locales = new Intl.Locale('en-US')
+    el.update(2)
+    expect(constructed).toBe(1)
+  })
+
   it('keeps the last value when update() is called with none', () => {
     const el = create()
     el.update(42)
