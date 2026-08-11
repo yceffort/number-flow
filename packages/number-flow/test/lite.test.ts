@@ -147,6 +147,30 @@ describe('NumberFlowLite (rAF engine)', () => {
     },
   )
 
+  // Regression: a non-animated update landing mid-spin used to leave the old
+  // tween running, deriving --y from the NEW --current plus the stale delta
+  // remainder — rendering the wrong numeral until the tween expired:
+  it('finishes in-flight tweens when an update lands with animations off', async () => {
+    const el = create()
+    set(el, 3)
+    set(el, 7)
+    step(0)
+    step(450) // mid-spin
+
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    set(el, 6)
+    // Finishing the tweens resolves animationsfinish on a microtask:
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const digit = digits(el)[0]!
+    expect(digit.style.getPropertyValue('--current')).toBe('6')
+    expect(digit.classList.contains('is-spinning')).toBe(false)
+    expect(yOf(digit, 6)).toBe('')
+    // And no orphaned tween keeps ticking:
+    step(2000)
+    expect(yOf(digit, 6)).toBe('')
+  })
+
   it('keeps digits and symbols in sync as the number grows and shrinks', async () => {
     const el = create()
     set(el, 1)

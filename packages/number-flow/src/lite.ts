@@ -267,7 +267,15 @@ export default class NumberFlowLite
   didUpdate() {
     // Safe to call this here because we know the animated prop is up-to-date.
     // Also make sure willUpdate didn't skip its measurement pass:
-    if (!this.computedAnimated || !this._preUpdated) return
+    if (!this.computedAnimated || !this._preUpdated) {
+      // A non-animated update landing mid-flight (hidden tab, reduced
+      // motion, invisible element) must not leave the old tweens running:
+      // they'd keep deriving offsets from the already-updated --current:
+      if (usesNativeEngine())
+        this.shadowRoot?.getAnimations().forEach((a) => a.finish())
+      else finishAll(this)
+      return
+    }
 
     // If we're already animating, cancel the previous animationsfinish event:
     if (this._abortAnimationsFinish) this._abortAnimationsFinish.abort()
