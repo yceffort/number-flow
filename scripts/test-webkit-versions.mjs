@@ -77,9 +77,23 @@ function ensurePlaywright(version) {
 }
 
 // --- 자식 모드: 한 버전을 headless로 검증 ---
+// 이 호스트에서 그 시절 WebKit 을 못 띄우는 경우의 종료 코드 (검증 실패와 구분):
+const EXIT_SKIP = 2
+
 async function runOne(version, port) {
   const pw = ensurePlaywright(version)
-  const browser = await pw.webkit.launch()
+  let browser
+  try {
+    browser = await pw.webkit.launch()
+  } catch (e) {
+    // 구버전 WebKit 은 요즘 배포판에 없는 라이브러리를 요구한다
+    // (Ubuntu 24.04 에는 libsoup-2.4 / libvpx7 / libpcre3 가 없음).
+    // 검증 실패가 아니라 "여기선 못 돌린다"이므로 실패로 세지 않는다:
+    console.log(
+      `  [playwright@${version}] SKIP — WebKit 실행 불가: ${String(e).replace(/\s+/g, ' ').slice(0, 160)}`,
+    )
+    process.exit(EXIT_SKIP)
+  }
   const wkVersion = browser.version()
   let failed = 0
   for (const engine of ['auto', 'raf']) {
@@ -151,6 +165,7 @@ if (argv[0] === '--one') {
   console.log(`정적 서버: http://localhost:${PORT}`)
 
   let failed = 0
+  let skipped = 0
   for (const version of targets) {
     console.log(`\n=== playwright@${version} (WebKit) ===`)
     // 구형 WebKit 빌드가 행이 걸려도 전체가 멈추지 않도록 자식 프로세스 + 타임아웃:
@@ -158,19 +173,26 @@ if (argv[0] === '--one') {
       const child = spawn('node', [SELF, '--one', version, String(PORT)], {
         stdio: 'inherit',
       })
+      let timedOut = false
       const killer = setTimeout(() => {
         console.log(
           '  SKIP: 5분 타임아웃 — 이 WebKit 빌드는 현재 macOS와 비호환일 수 있음',
         )
+        timedOut = true
         child.kill('SIGKILL')
       }, 300_000)
       child.on('close', (c) => {
         clearTimeout(killer)
-        resolve(c ?? 1)
+        resolve(timedOut ? EXIT_SKIP : (c ?? 1))
       })
     })
-    if (code !== 0) failed++
+    if (code === EXIT_SKIP) skipped++
+    else if (code !== 0) failed++
   }
   server.close()
+  if (skipped)
+    console.log(
+      `\n${skipped}개 버전은 이 호스트에서 실행할 수 없어 건너뛰었습니다.`,
+    )
   process.exit(failed ? 1 : 0)
 }
