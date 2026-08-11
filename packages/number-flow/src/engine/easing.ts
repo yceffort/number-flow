@@ -182,7 +182,10 @@ export const parseEasing = (easing?: string): EasingFn => {
     }
     fn = linear
   }
-  if (cache.size >= CACHE_MAX) cache.clear()
+  // Evict the oldest entry rather than clearing: a per-value caller at
+  // capacity would otherwise wipe the whole cache — including the hot
+  // default spring — on every new easing and degrade to a ~0% hit rate:
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!)
   cache.set(easing, fn)
   return fn
 }

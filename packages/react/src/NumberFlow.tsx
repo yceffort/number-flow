@@ -68,7 +68,11 @@ const getFormatter = (
 ) => {
   let formatter = formatters.get(key)
   if (!formatter) {
-    if (formatters.size >= FORMATTERS_MAX) formatters.clear()
+    // Evict the oldest entry rather than clearing: a render pass with many
+    // distinct keys (e.g. per-row formats in a table) would otherwise wipe
+    // and rebuild every formatter on each pass:
+    if (formatters.size >= FORMATTERS_MAX)
+      formatters.delete(formatters.keys().next().value!)
     formatters.set(key, (formatter = new Intl.NumberFormat(locales, format)))
   }
   return formatter
