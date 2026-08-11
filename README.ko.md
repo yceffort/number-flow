@@ -7,7 +7,7 @@
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-**라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/실시간 티커/인터럽트/rAF 폴백 강제/그룹/continuous 스토리를 직접 조작해볼 수 있습니다.
+**라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/백분율/실시간 티커/인터럽트/rAF 폴백 강제/그룹/Continuous 플러그인 스토리를 직접 조작해볼 수 있습니다.
 
 > **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅·DOM 구조·스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체해 **구형 브라우저에서도 동일한 애니메이션이 동작**하도록 확장했습니다.
 
@@ -67,7 +67,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 ## 추가 API (원본 대비)
 
 - `setEngineMode('auto' | 'native' | 'raf')` — 엔진 강제 선택. 애니메이션 시작 전에 호출해야 합니다.
-- `supportsNativeAnimations` — 이 브라우저가 네이티브 경로를 쓰는지 여부.
+- `supportsNativeAnimations` — 이 브라우저가 네이티브 경로를 _탈 수 있는지_ 여부. 정적 기능 감지값이라 `setEngineMode('raf')`를 호출해도 바뀌지 않습니다.
 - `canAnimate` — rAF만 있으면 `true` (원본은 세 가지 CSS 기능을 모두 요구).
 
 ## 원본과의 차이 (정직한 한계)
