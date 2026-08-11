@@ -52,7 +52,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 | Android Chrome / WebView       | 125+     | **66+** (verified with real binaries) |
 | Desktop Chrome                 | 125+     | **66+** (verified with real binaries) |
 
-Below that, it gracefully falls back to the same behavior as upstream: values swap instantly without animation. The floor is set by `Intl.NumberFormat.formatToParts` (Chrome 64/Safari 13) and `AbortController` (Chrome 66/Safari 12.1).
+The floor is set by `Intl.NumberFormat.formatToParts` (Chrome 64/Safari 13) and `AbortController` (Chrome 66/Safari 12.1).
 
 The floor is enforced three ways: a `.browserslistrc` declaration, an `eslint-plugin-compat` check in CI, and a CI job that runs the selftest on real Chromium 66/80/114 binaries.
 
@@ -63,6 +63,12 @@ The floor is enforced three ways: a `.browserslistrc` declaration, an `eslint-pl
 - **WebKit 17.4 / 18.2**: native path — 42 of 44 on macOS builds, 43 of 44 on the Linux builds CI runs. The width-scale (and, on macOS, enter-fade) assertions fail **identically on upstream**. See [Known issues](#known-issues); fixed in WebKit 26, and passes with rAF forced
 - **Latest Chromium / Firefox / WebKit 26.x**: PASS on both native and forced-rAF paths
 - **Next.js 16 (React 19) SSR**: server markup + hydration smoke PASS
+
+### If something breaks anyway
+
+Within the supported range, a misbehaving animation API degrades to a static-but-correct render, not a missing number. The value is always real DOM text (every digit keeps its 0–9 numerals and only the current one is shown), a failed transform computes to `none` (in place), and a failed enter fade leaves opacity at its initial `1` (shown immediately). The Safari 17.4–18.x `var()` bug below is the real-world example: two visual effects drop out while values, layout, and accessibility stay correct. With SSR, the server-rendered fallback `<span>` also survives any client-side failure.
+
+Below the floor there is no graceful degradation — updates throw. Chrome 64–65 lack `AbortController`, so an animated update throws right after the new value lands in the DOM (in React, an error boundary may then unmount the tree), and below Chrome 64/Safari 13 `formatToParts` is missing, so nothing renders client-side at all. If you need to reach lower than the floor, gate usage yourself.
 
 ## Additional APIs (on top of upstream)
 
