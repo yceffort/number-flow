@@ -1,7 +1,21 @@
 import {describe, expect, it} from 'vitest'
 
 import {formatToData} from '../src/formatter'
-import {renderFallbackStyles, renderInnerHTML} from '../src/ssr'
+import {
+  renderFallbackStyles,
+  renderInnerHTML,
+  ServerSafeHTMLElement,
+} from '../src/ssr'
+
+// The point of this test project's node environment: these tests must
+// exercise the branch Next.js SSR actually runs, where HTMLElement is a stub
+// (BROWSER = false). Under the browser-conditioned project this would be the
+// real jsdom HTMLElement:
+it('runs against the real server resolution (BROWSER=false)', () => {
+  expect(Object.getOwnPropertyNames(ServerSafeHTMLElement.prototype)).toEqual([
+    'constructor',
+  ])
+})
 
 const fmt = new Intl.NumberFormat('en-US')
 const render = (value: number, prefix?: string, suffix?: string) =>
