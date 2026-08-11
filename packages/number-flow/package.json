@@ -1,7 +1,7 @@
 {
   "name": "@yceffort/number-flow",
   "version": "0.1.0",
-  "description": "Fork of number-flow with extended browser support: hybrid WAAPI/rAF animation engine that keeps animations working down to Chrome ~70 and iOS ~13.",
+  "description": "Fork of number-flow with extended browser support: hybrid WAAPI/rAF animation engine that keeps animations working down to Chrome 66 and iOS ~13.",
   "author": {
     "name": "yceffort",
     "url": "https://yceffort.kr"
