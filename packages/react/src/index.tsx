@@ -31,7 +31,7 @@ export const usePrefersReducedMotion = () =>
       _prefersReducedMotion?.addEventListener('change', cb)
       return () => _prefersReducedMotion?.removeEventListener('change', cb)
     },
-    () => _prefersReducedMotion!.matches,
+    () => _prefersReducedMotion?.matches ?? false,
     () => false,
   )
 

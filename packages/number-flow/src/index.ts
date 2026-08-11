@@ -58,8 +58,8 @@ export default class NumberFlow extends NumberFlowLite {
 
   private _formatter?: Intl.NumberFormat
 
-  private _prevFormat?: Format
-  private _prevLocales?: Intl.LocalesArgument
+  private _prevFormat?: string
+  private _prevLocales?: string
 
   private _value?: Value
   get value() {
@@ -67,15 +67,26 @@ export default class NumberFlow extends NumberFlowLite {
   }
 
   update(value?: Value) {
-    // Might want to do a deep-equal check here:
+    // Compare serialized, not by identity: constructing an Intl.NumberFormat
+    // is far more expensive than stringifying these, and callers routinely
+    // pass a fresh object literal on every update. Canonicalize the locales
+    // first — Intl.Locale instances have no own enumerable properties, so
+    // JSON.stringify alone would collapse them all to '{}':
+    const format = this.format ? JSON.stringify(this.format) : ''
+    const locales = this.locales
+      ? // getCanonicalLocales accepts Intl.Locale per spec; TS lib types lag:
+        JSON.stringify(
+          Intl.getCanonicalLocales(this.locales as string | string[]),
+        )
+      : ''
     if (
       !this._formatter ||
-      this._prevFormat !== this.format ||
-      this._prevLocales !== this.locales
+      this._prevFormat !== format ||
+      this._prevLocales !== locales
     ) {
       this._formatter = new Intl.NumberFormat(this.locales, this.format)
-      this._prevFormat = this.format
-      this._prevLocales = this.locales
+      this._prevFormat = format
+      this._prevLocales = locales
     }
     if (value != null) {
       this._value = value

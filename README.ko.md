@@ -7,7 +7,7 @@
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-**라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/실시간 티커/인터럽트/rAF 폴백 강제/그룹/continuous 스토리를 직접 조작해볼 수 있습니다.
+**라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/백분율/실시간 티커/인터럽트/rAF 폴백 강제/그룹/Continuous 플러그인 스토리를 직접 조작해볼 수 있습니다.
 
 > **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅·DOM 구조·스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체해 **구형 브라우저에서도 동일한 애니메이션이 동작**하도록 확장했습니다.
 
@@ -58,16 +58,16 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 ### 검증된 매트릭스 (전부 실바이너리/실엔진)
 
-- **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: 자동 감지로 rAF 폴백 선택, 시나리오 31건 PASS
+- **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: 자동 감지로 rAF 폴백 선택, 시나리오 44건 PASS
 - **WebKit 16.4** (iOS/macOS Safari 16.4 상당): rAF 폴백 자동 선택, PASS — 원본이 애니메이션을 끄는 버전에서 동작
-- **WebKit 17.4 / 18.2**: 네이티브 경로 PASS (폭 스케일 1건은 **원본도 동일하게 실패**하는 당시 WebKit 엔진 특성 — WebKit 26에서 해소, rAF 강제 시 통과)
+- **WebKit 17.4 / 18.2**: 네이티브 경로에서 macOS 빌드는 44건 중 42건, CI가 도는 Linux 빌드는 43건 PASS — 폭 스케일(및 macOS에서는 등장 페이드인)은 **원본도 동일하게 실패**합니다. [알려진 이슈](#알려진-이슈) 참고 (WebKit 26에서 해소, rAF 강제 시 통과)
 - **최신 Chromium / Firefox / WebKit 26.x**: 네이티브·rAF 강제 모두 PASS
 - **Next.js 16 (React 19) SSR**: 서버 마크업 + 히드레이션 스모크 PASS
 
 ## 추가 API (원본 대비)
 
 - `setEngineMode('auto' | 'native' | 'raf')` — 엔진 강제 선택. 애니메이션 시작 전에 호출해야 합니다.
-- `supportsNativeAnimations` — 이 브라우저가 네이티브 경로를 쓰는지 여부.
+- `supportsNativeAnimations` — 이 브라우저가 네이티브 경로를 _탈 수 있는지_ 여부. 정적 기능 감지값이라 `setEngineMode('raf')`를 호출해도 바뀌지 않습니다.
 - `canAnimate` — rAF만 있으면 `true` (원본은 세 가지 CSS 기능을 모두 요구).
 
 ## 원본과의 차이 (정직한 한계)
@@ -76,6 +76,52 @@ import NumberFlow from '@yceffort/number-flow-react'
 - 폴백에서 `EffectTiming`은 `duration`/`delay`/`easing`만 지원합니다 (`iterations` 등은 무시).
 - `mix-blend-mode: plus-lighter` 미지원 브라우저에서는 ± 기호 크로스페이드가 일반 페이드로 소폭 열화됩니다.
 - Vue/Svelte 래퍼는 아직 포팅하지 않았습니다 (코어는 동일하므로 필요 시 원본 래퍼를 참고해 추가 가능).
+
+## 알려진 이슈
+
+**Safari 17.4+에서 폭 스케일 트윈과 등장 페이드인이 빠집니다.** (원본
+`number-flow`도 동일하게 영향을 받는 WebKit 버그이며, 이 포크가 만든 문제가
+아닙니다.)
+
+**같은 shadow root 안에서 애니메이션이 3개 이상 동시에 돌면**, WebKit은 등록된
+커스텀 프로퍼티의 애니메이션 값을 **같은 요소**의 다른 속성 `var()` 치환에
+반영하지 않습니다. `getComputedStyle`은 애니메이션 값을 그대로 보고하지만 실제
+스타일 해석에는 정적 선언값이 쓰입니다. 그 결과:
+
+- `.number`의 `--scale-x: calc(1 + var(--_number-flow-d-width) / var(--width))`가
+  델타를 `0`으로 계산 → 폭이 변해도 숫자가 스케일되지 않습니다.
+- `.animate-presence`의 `opacity: calc(1 + var(--_number-flow-d-opacity))`도
+  마찬가지 → 새로 추가되는 문자가 페이드인 없이 나타납니다. 이쪽은 빌드에
+  따라 다릅니다. macOS WebKit 빌드(iOS/macOS Safari 사용자가 실제로 쓰는
+  것)에서는 재현되지만, CI가 도는 Linux 빌드에서는 재현되지 않습니다.
+
+자릿수 스핀은 영향이 없습니다. `--_number-flow-d`는 `inherits: true`로 등록되어
+**자식**(`.digit__num`)이 소비하는 구조라 버그를 비껴갑니다. 최종 값·레이아웃·
+텍스트·접근성은 모두 정상이며, 위 두 가지 중간 시각 효과만 누락됩니다.
+
+애니메이션 3개는 실제 업데이트라면 무조건 넘는 수치라, 해당 버전에서는 사실상
+상시 발생합니다. Safari 16.4 이하는 rAF 폴백을 자동 선택하므로 무관하고,
+**WebKit 26에서 해소**되었습니다. 즉 Safari 17.4 ~ 18.x 구간에만 해당합니다.
+
+자동 강등을 넣지 않은 이유는 동기적 기능 감지가 불가능하기 때문입니다 —
+`Animation.currentTime`을 직접 설정하면 스타일이 정상 계산되어 프로브로는
+버그가 재현되지 않습니다.
+
+네이티브 경로 유지보다 이 두 효과가 더 중요하다면 폴백 엔진을 명시적으로
+선택하세요. 모든 WebKit 버전에서 둘 다 정상 동작합니다:
+
+```js
+import {setEngineMode} from '@yceffort/number-flow'
+
+setEngineMode('raf') // 애니메이션이 시작되기 전에 호출
+```
+
+`pnpm test:webkit`이 이를 검증합니다. 러너가 이 두 항목을 알려진 실패 목록으로
+관리하므로, 이것들만 실패하는 동안 `old-webkit` CI 잡은 통과합니다 — 그 외의
+실패는 진짜 회귀입니다. 매 실행마다 `~ (알려진 이슈) …`로 계속 출력되며, 나중에
+어떤 WebKit이 이 항목을 통과하기 시작하면 러너가 목록을 줄이라고 알려줍니다.
+러너에서 해당 WebKit 빌드를 띄울 수 없는 버전은 실패가 아니라 `SKIP`으로
+보고합니다.
 
 ## 개발
 

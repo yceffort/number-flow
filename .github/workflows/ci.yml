@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -69,3 +72,37 @@ jobs:
 
       - name: Selftest on real Chromium 66 / 80 / 114 (Linux snapshots)
         run: node scripts/test-old-chrome.mjs 66 80 114
+
+  # 구버전 WebKit(Safari 16.4 / 17.4 / 18.2)까지 훑는다.
+  # Safari 17.4~18.x 네이티브 경로의 알려진 결함은 러너 스크립트가 화이트리스트로
+  # 걸러내므로(README의 "Known issues" 참고), 이 잡의 실패는 진짜 회귀를 뜻한다:
+  old-webkit:
+    # 22.04: 구형 WebKit 빌드가 요구하는 libsoup-2.4 / libvpx7 / libpcre3 는
+    # Ubuntu 24.04 에 없다. 없으면 해당 버전은 SKIP 으로 빠진다.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      # 각 시절 WebKit 은 요구하는 라이브러리가 다르므로 버전별로 깐다:
+      - name: Install webkit system libraries
+        run: |
+          npx playwright install-deps webkit
+          npx --yes playwright@1.33.0 install-deps webkit || true
+          npx --yes playwright@1.40.0 install-deps webkit || true
+
+      - name: Selftest on WebKit 16.4 / 17.4 / 18.2
+        run: pnpm test:webkit

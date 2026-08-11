@@ -78,6 +78,12 @@ const appliers: Record<string, Applier> = {
     const c = current + total
     for (let i = 0; i < length; i++) {
       const child = el.children[i] as HTMLElement
+      // Keep writing resting values at idle: without mod()/round() the
+      // stylesheet can't compute --y, and `is-spinning` — removed on the
+      // flow-wide animationsfinish, not per digit — may still be exposing
+      // the inert numerals of a digit whose own spin already settled.
+      // Digit removes the inline values once the whole flow is at rest, so
+      // they can't go stale for a later non-animated `--current` change:
       child.style.setProperty('--y', `${digitYPercent(c, length, i)}%`)
     }
   },

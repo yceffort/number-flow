@@ -36,7 +36,7 @@ importers:
   demo:
     dependencies:
       '@number-flow/react':
-        specifier: latest
+        specifier: ^0.6.2
         version: 0.6.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@yceffort/number-flow':
         specifier: workspace:*

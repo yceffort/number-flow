@@ -267,7 +267,15 @@ export default class NumberFlowLite
   didUpdate() {
     // Safe to call this here because we know the animated prop is up-to-date.
     // Also make sure willUpdate didn't skip its measurement pass:
-    if (!this.computedAnimated || !this._preUpdated) return
+    if (!this.computedAnimated || !this._preUpdated) {
+      // A non-animated update landing mid-flight (hidden tab, reduced
+      // motion, invisible element) must not leave the old tweens running:
+      // they'd keep deriving offsets from the already-updated --current:
+      if (usesNativeEngine())
+        this.shadowRoot?.getAnimations().forEach((a) => a.finish())
+      else finishAll(this)
+      return
+    }
 
     // If we're already animating, cancel the previous animationsfinish event:
     if (this._abortAnimationsFinish) this._abortAnimationsFinish.abort()
@@ -382,6 +390,10 @@ class Num {
     )
   }
 }
+
+// Lets the sections diff against the incoming parts in one pass instead of
+// scanning `parts` once per existing child:
+const keySet = (parts: KeyedNumberPart[]) => new Set(parts.map((p) => p.key))
 
 type SectionProps = {justify: Justify} & HTMLProps<'span'>
 
@@ -543,11 +555,12 @@ abstract class Section {
 
 class NumberSection extends Section {
   update(parts: KeyedNumberPart[]) {
+    const keys = keySet(parts)
     const removed = new Map<NumberPartKey, Char>()
 
     this.children.forEach((comp, key) => {
       // Keep track of removed children:
-      if (!parts.find((p) => p.key === key)) {
+      if (!keys.has(key)) {
         removed.set(key, comp)
       }
       // Put everything back into the flow briefly, to recompute offsets:
@@ -568,11 +581,12 @@ class NumberSection extends Section {
 
 class SymbolSection extends Section {
   update(parts: KeyedNumberPart[]) {
+    const keys = keySet(parts)
     const removed = new Map<NumberPartKey, Char>()
 
     this.children.forEach((comp, key) => {
       // Keep track of removed children:
-      if (!parts.find((p) => p.key === key)) {
+      if (!keys.has(key)) {
         removed.set(key, comp)
       }
     })
@@ -637,7 +651,7 @@ class AnimatePresence {
       return
     }
 
-    this.el.style.setProperty('--_number-flow-d-opacity', val ? '0' : '-.999')
+    this.el.style.setProperty(opacityDeltaVar, val ? '0' : '-.999')
     animate(
       this.flow,
       this.el,
@@ -798,6 +812,10 @@ export class Digit extends Char<KeyedDigitPart> {
 
   private _onAnimationsFinish = () => {
     this.el.classList.remove('is-spinning')
+    // The rAF engine keeps resting --y values inline while other digits may
+    // still be animating; once the whole flow settles, hand the numerals
+    // back to the stylesheet so nothing stale outranks it later:
+    this._numbers.forEach((num) => num.style.removeProperty('--y'))
   }
 }
 
