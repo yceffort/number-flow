@@ -52,7 +52,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 | Android Chrome / WebView       | 125+  | **66+** (실바이너리 검증)       |
 | 데스크톱 Chrome                | 125+  | **66+** (실바이너리 검증)       |
 
-그 미만 브라우저에서는 원본과 동일하게 "애니메이션 없이 값 즉시 교체"로 우아하게 폴백합니다. 하한을 결정하는 API는 `Intl.NumberFormat.formatToParts`(Chrome 64/Safari 13)와 `AbortController`(Chrome 66/Safari 12.1)입니다.
+하한을 결정하는 API는 `Intl.NumberFormat.formatToParts`(Chrome 64/Safari 13)와 `AbortController`(Chrome 66/Safari 12.1)입니다.
 
 이 하한은 세 가지 방식으로 강제됩니다: `.browserslistrc` 선언, CI의 `eslint-plugin-compat` 정적 검사, 그리고 실제 Chromium 66/80/114 바이너리로 selftest를 돌리는 CI 잡.
 
@@ -63,6 +63,12 @@ import NumberFlow from '@yceffort/number-flow-react'
 - **WebKit 17.4 / 18.2**: 네이티브 경로에서 macOS 빌드는 44건 중 42건, CI가 도는 Linux 빌드는 43건 PASS — 폭 스케일(및 macOS에서는 등장 페이드인)은 **원본도 동일하게 실패**합니다. [알려진 이슈](#알려진-이슈) 참고 (WebKit 26에서 해소, rAF 강제 시 통과)
 - **최신 Chromium / Firefox / WebKit 26.x**: 네이티브·rAF 강제 모두 PASS
 - **Next.js 16 (React 19) SSR**: 서버 마크업 + 히드레이션 스모크 PASS
+
+### 그래도 뭔가 깨진다면
+
+지원 범위 안에서는 애니메이션 API가 오동작해도 "숫자가 안 보이는" 방향이 아니라 "정적이지만 정확한 렌더링"으로 열화됩니다. 값은 항상 실제 DOM 텍스트이고(각 자릿수가 0–9 numeral을 모두 갖고 현재 값만 표시), transform 계산이 실패하면 `none`(제자리)으로, 등장 페이드가 실패하면 opacity 초깃값 `1`(즉시 표시)로 계산됩니다. 아래 Safari 17.4~18.x `var()` 버그가 실제 사례로, 시각 효과 두 개만 빠질 뿐 값·레이아웃·접근성은 정상입니다. SSR을 쓰면 서버가 그린 폴백 `<span>`이 클라이언트 실패와 무관하게 남습니다.
+
+하한 미만에서는 우아한 강등이 없습니다 — 업데이트가 예외를 던집니다. Chrome 64~65는 `AbortController`가 없어 애니메이션 업데이트가 새 값이 DOM에 반영된 직후 throw하고(React라면 에러 바운더리가 트리를 내릴 수 있음), Chrome 64/Safari 13 미만은 `formatToParts`가 없어 클라이언트에서는 아무것도 렌더되지 않습니다. 하한보다 아래를 지원해야 한다면 사용처에서 직접 가드하세요.
 
 ## 추가 API (원본 대비)
 
