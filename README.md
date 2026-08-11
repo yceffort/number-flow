@@ -89,8 +89,9 @@ real Chromium 66/80/114 binaries.
   rAF fallback, 44 assertions PASS
 - **WebKit 16.4** (≈ iOS/macOS Safari 16.4): auto-detects the rAF fallback,
   PASS — animates where upstream turns animations off
-- **WebKit 17.4 / 18.2**: native path, 42 of 44 PASS — the width-scale and
-  enter-fade assertions fail **identically on upstream**. See
+- **WebKit 17.4 / 18.2**: native path — 42 of 44 on macOS builds, 43 of 44
+  on the Linux builds CI runs. The width-scale (and, on macOS, enter-fade)
+  assertions fail **identically on upstream**. See
   [Known issues](#known-issues); fixed in WebKit 26, and passes with rAF
   forced
 - **Latest Chromium / Firefox / WebKit 26.x**: PASS on both native and
@@ -133,7 +134,9 @@ resolution uses the static declaration, so:
   resolves as if the delta were `0` → the number never scales while its
   width changes.
 - `.animate-presence`'s `opacity: calc(1 + var(--_number-flow-d-opacity))`
-  does the same → newly added characters appear without fading in.
+  does the same → newly added characters appear without fading in. This one
+  is build-dependent: it reproduces on the macOS WebKit builds (what
+  iOS/macOS Safari users actually run) but not on the Linux builds CI uses.
 
 Digit spinning is unaffected: `--_number-flow-d` is registered with
 `inherits: true` and is consumed by a _child_ (`.digit__num`), which
@@ -160,7 +163,9 @@ setEngineMode('raf') // before any animation starts
 ```
 
 `pnpm test:webkit` covers this; CI runs it as a non-blocking `old-webkit`
-job so the two failures stay visible without breaking the pipeline.
+job so the failures stay visible without breaking the pipeline. Versions
+whose WebKit build can't launch on the runner are reported as `SKIP` rather
+than counted as failures.
 
 ## Development
 

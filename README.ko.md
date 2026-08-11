@@ -60,7 +60,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 - **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: 자동 감지로 rAF 폴백 선택, 시나리오 44건 PASS
 - **WebKit 16.4** (iOS/macOS Safari 16.4 상당): rAF 폴백 자동 선택, PASS — 원본이 애니메이션을 끄는 버전에서 동작
-- **WebKit 17.4 / 18.2**: 네이티브 경로에서 44건 중 42건 PASS — 폭 스케일과 등장 페이드인 2건은 **원본도 동일하게 실패**합니다. [알려진 이슈](#알려진-이슈) 참고 (WebKit 26에서 해소, rAF 강제 시 통과)
+- **WebKit 17.4 / 18.2**: 네이티브 경로에서 macOS 빌드는 44건 중 42건, CI가 도는 Linux 빌드는 43건 PASS — 폭 스케일(및 macOS에서는 등장 페이드인)은 **원본도 동일하게 실패**합니다. [알려진 이슈](#알려진-이슈) 참고 (WebKit 26에서 해소, rAF 강제 시 통과)
 - **최신 Chromium / Firefox / WebKit 26.x**: 네이티브·rAF 강제 모두 PASS
 - **Next.js 16 (React 19) SSR**: 서버 마크업 + 히드레이션 스모크 PASS
 
@@ -91,7 +91,9 @@ import NumberFlow from '@yceffort/number-flow-react'
 - `.number`의 `--scale-x: calc(1 + var(--_number-flow-d-width) / var(--width))`가
   델타를 `0`으로 계산 → 폭이 변해도 숫자가 스케일되지 않습니다.
 - `.animate-presence`의 `opacity: calc(1 + var(--_number-flow-d-opacity))`도
-  마찬가지 → 새로 추가되는 문자가 페이드인 없이 나타납니다.
+  마찬가지 → 새로 추가되는 문자가 페이드인 없이 나타납니다. 이쪽은 빌드에
+  따라 다릅니다. macOS WebKit 빌드(iOS/macOS Safari 사용자가 실제로 쓰는
+  것)에서는 재현되지만, CI가 도는 Linux 빌드에서는 재현되지 않습니다.
 
 자릿수 스핀은 영향이 없습니다. `--_number-flow-d`는 `inherits: true`로 등록되어
 **자식**(`.digit__num`)이 소비하는 구조라 버그를 비껴갑니다. 최종 값·레이아웃·
@@ -115,7 +117,8 @@ setEngineMode('raf') // 애니메이션이 시작되기 전에 호출
 ```
 
 `pnpm test:webkit`이 이를 검증하며, CI는 `old-webkit` 잡으로 non-blocking
-실행해 두 건의 실패가 파이프라인을 막지 않으면서도 계속 보이도록 했습니다.
+실행해 실패가 파이프라인을 막지 않으면서도 계속 보이도록 했습니다. 러너에서
+해당 WebKit 빌드를 띄울 수 없는 버전은 실패가 아니라 `SKIP`으로 보고합니다.
 
 ## 개발
 
