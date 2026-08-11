@@ -162,10 +162,13 @@ import {setEngineMode} from '@yceffort/number-flow'
 setEngineMode('raf') // before any animation starts
 ```
 
-`pnpm test:webkit` covers this; CI runs it as a non-blocking `old-webkit`
-job so the failures stay visible without breaking the pipeline. Versions
-whose WebKit build can't launch on the runner are reported as `SKIP` rather
-than counted as failures.
+`pnpm test:webkit` covers this. The runner keeps these two assertions in an
+explicit known-failure list, so the `old-webkit` CI job is green while they
+are the only thing failing — anything else is a real regression. They are
+still printed on every run (`~ (알려진 이슈) …`), and if a future WebKit
+starts passing them the runner says so, prompting the list to shrink.
+Versions whose WebKit build can't launch on the runner report `SKIP`
+instead of counting as failures.
 
 ## Development
 

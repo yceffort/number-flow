@@ -74,14 +74,13 @@ jobs:
         run: node scripts/test-old-chrome.mjs 66 80 114
 
   # 구버전 WebKit(Safari 16.4 / 17.4 / 18.2)까지 훑는다.
-  # Safari 17.4+ 네이티브 경로에는 알려진 미해결 결함이 있어(README의 "Known
-  # issues" 참고) 아직 실패한다. 회귀를 눈에 보이게 두되 파이프라인은 막지 않는다:
+  # Safari 17.4~18.x 네이티브 경로의 알려진 결함은 러너 스크립트가 화이트리스트로
+  # 걸러내므로(README의 "Known issues" 참고), 이 잡의 실패는 진짜 회귀를 뜻한다:
   old-webkit:
     # 22.04: 구형 WebKit 빌드가 요구하는 libsoup-2.4 / libvpx7 / libpcre3 는
     # Ubuntu 24.04 에 없다. 없으면 해당 버전은 SKIP 으로 빠진다.
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

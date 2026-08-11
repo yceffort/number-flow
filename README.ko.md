@@ -116,9 +116,12 @@ import {setEngineMode} from '@yceffort/number-flow'
 setEngineMode('raf') // 애니메이션이 시작되기 전에 호출
 ```
 
-`pnpm test:webkit`이 이를 검증하며, CI는 `old-webkit` 잡으로 non-blocking
-실행해 실패가 파이프라인을 막지 않으면서도 계속 보이도록 했습니다. 러너에서
-해당 WebKit 빌드를 띄울 수 없는 버전은 실패가 아니라 `SKIP`으로 보고합니다.
+`pnpm test:webkit`이 이를 검증합니다. 러너가 이 두 항목을 알려진 실패 목록으로
+관리하므로, 이것들만 실패하는 동안 `old-webkit` CI 잡은 통과합니다 — 그 외의
+실패는 진짜 회귀입니다. 매 실행마다 `~ (알려진 이슈) …`로 계속 출력되며, 나중에
+어떤 WebKit이 이 항목을 통과하기 시작하면 러너가 목록을 줄이라고 알려줍니다.
+러너에서 해당 WebKit 빌드를 띄울 수 없는 버전은 실패가 아니라 `SKIP`으로
+보고합니다.
 
 ## 개발
 
