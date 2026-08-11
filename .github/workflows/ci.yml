@@ -77,7 +77,9 @@ jobs:
   # Safari 17.4+ 네이티브 경로에는 알려진 미해결 결함이 있어(README의 "Known
   # issues" 참고) 아직 실패한다. 회귀를 눈에 보이게 두되 파이프라인은 막지 않는다:
   old-webkit:
-    runs-on: ubuntu-latest
+    # 22.04: 구형 WebKit 빌드가 요구하는 libsoup-2.4 / libvpx7 / libpcre3 는
+    # Ubuntu 24.04 에 없다. 없으면 해당 버전은 SKIP 으로 빠진다.
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     continue-on-error: true
     steps:
@@ -96,8 +98,12 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      # 각 시절 WebKit 은 요구하는 라이브러리가 다르므로 버전별로 깐다:
       - name: Install webkit system libraries
-        run: npx playwright install-deps webkit
+        run: |
+          npx playwright install-deps webkit
+          npx --yes playwright@1.33.0 install-deps webkit || true
+          npx --yes playwright@1.40.0 install-deps webkit || true
 
       - name: Selftest on WebKit 16.4 / 17.4 / 18.2
         run: pnpm test:webkit
