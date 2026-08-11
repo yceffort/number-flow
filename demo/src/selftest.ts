@@ -144,20 +144,27 @@ async function run() {
   let done = finished()
   flow.update(135801.6)
 
+  // 새로 등장하는 문자는 fade-in 중이어야 한다. 나가는 문자([inert])는 인라인
+  // 선언이 따로 있어 원래 동작하므로, 들어오는 쪽만 센다. 450ms 페이드를
+  // 고정 시점 한 번으로 샘플링하면 느린 CI에선 이미 끝난 뒤일 수 있으므로,
+  // 끝날 때까지 주기적으로 살펴 한 번이라도 관찰되면 통과로 본다:
+  let fadingInSeen = 0
+  const fadePoll = setInterval(() => {
+    const n = Array.from(
+      root.querySelectorAll('.animate-presence:not([inert])'),
+    ).filter((el) => {
+      const o = parseFloat(getComputedStyle(el).opacity)
+      return o > 0 && o < 1
+    }).length
+    if (n > fadingInSeen) fadingInSeen = n
+  }, 16)
+
   await wait(300)
   const midSpinning = root.querySelectorAll('.digit.is-spinning').length
   const midMoving = Array.from(
     root.querySelectorAll('.digit__num:not([inert])'),
   ).filter((n) => !IDENTITY.test(getComputedStyle(n).transform)).length
   const midNumberT = getComputedStyle(numberEl).transform
-  // 새로 등장하는 문자는 fade-in 중이어야 한다. 나가는 문자([inert])는 인라인
-  // 선언이 따로 있어 원래 동작하므로, 들어오는 쪽만 센다:
-  const midFadingIn = Array.from(
-    root.querySelectorAll('.animate-presence:not([inert])'),
-  ).filter((el) => {
-    const o = parseFloat(getComputedStyle(el).opacity)
-    return o > 0 && o < 1
-  }).length
   // 마스크는 --width가 세팅되는 첫 애니메이션부터 유효해진다 (원본과 동일한 동작):
   const midMask =
     getComputedStyle(numberEl).getPropertyValue('-webkit-mask-image')
@@ -168,6 +175,7 @@ async function run() {
   )
 
   let ok = await done
+  clearInterval(fadePoll)
   if (!ok) {
     assert('scenario1 animationsfinish fired', false, {
       computedAnimated: flow.computedAnimated,
@@ -182,7 +190,11 @@ async function run() {
     !IDENTITY.test(midNumberT),
     midNumberT,
   )
-  assert('scenario1 new chars fade in mid-flight', midFadingIn > 0, midFadingIn)
+  assert(
+    'scenario1 new chars fade in mid-flight',
+    fadingInSeen > 0,
+    fadingInSeen,
+  )
   assertClean('scenario1 end')
   assert('scenario1 text', currentText() === '135,801.6', currentText())
 
