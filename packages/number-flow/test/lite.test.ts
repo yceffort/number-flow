@@ -94,7 +94,7 @@ describe('NumberFlowLite (rAF engine)', () => {
     expect(el.getAttribute('aria-label')).toBe('12,345.6')
   })
 
-  it('spins a digit and settles with no inline --y left behind', () => {
+  it('spins a digit and settles with no inline --y left behind', async () => {
     const el = create()
     set(el, 3)
     set(el, 7)
@@ -103,8 +103,11 @@ describe('NumberFlowLite (rAF engine)', () => {
     const digit = digits(el)[0]!
     step(0)
     expect(yOf(digit, 3)).toBe('0%') // starts where it was
-    step(2000) // well past transformTiming
+    // The numerals stay pinned inline until the whole flow settles, then
+    // animationsfinish hands them back to the stylesheet:
+    await settle()
     expect(digit.style.getPropertyValue('--current')).toBe('7')
+    expect(digit.classList.contains('is-spinning')).toBe(false)
     expect(yOf(digit, 7)).toBe('')
   })
 
@@ -126,21 +129,23 @@ describe('NumberFlowLite (rAF engine)', () => {
           get: () => 0,
         }),
     ],
-  ])('leaves no stale --y for a non-animated update (%s)', (_name, disable) => {
-    const el = create()
-    set(el, 3)
-    set(el, 7)
-    step(0)
-    step(2000)
+  ])(
+    'leaves no stale --y for a non-animated update (%s)',
+    async (_name, disable) => {
+      const el = create()
+      set(el, 3)
+      set(el, 7)
+      await settle()
 
-    const digit = digits(el)[0]!
-    disable(el)
-    set(el, 6)
+      const digit = digits(el)[0]!
+      disable(el)
+      set(el, 6)
 
-    expect(el.computedAnimated).toBe(false)
-    expect(digit.style.getPropertyValue('--current')).toBe('6')
-    expect(yOf(digit, 6)).toBe('')
-  })
+      expect(el.computedAnimated).toBe(false)
+      expect(digit.style.getPropertyValue('--current')).toBe('6')
+      expect(yOf(digit, 6)).toBe('')
+    },
+  )
 
   it('keeps digits and symbols in sync as the number grows and shrinks', async () => {
     const el = create()

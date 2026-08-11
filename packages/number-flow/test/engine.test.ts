@@ -176,16 +176,28 @@ describe('rAF engine', () => {
       (digit.children[5] as HTMLElement).style.getPropertyValue('--y'),
     ).toBe('0%')
     step(50) // c = 7, and the spin is over
-    // Every --y is handed back to the stylesheet at rest. Leaving them inline
-    // would outrank the CSS formula and misplace the next non-animated value:
-    for (let i = 0; i < 10; i++) {
-      expect(
-        (digit.children[i] as HTMLElement).style.getPropertyValue('--y'),
-      ).toBe('')
-    }
+    // Resting values stay inline at idle: without mod()/round() the
+    // stylesheet can't compute --y, and the digit may still be exposing its
+    // inert numerals until the flow-wide animationsfinish removes
+    // is-spinning. NumberFlowLite removes them once the flow settles:
+    expect(
+      (digit.children[7] as HTMLElement).style.getPropertyValue('--y'),
+    ).toBe('0%')
+    expect(
+      (digit.children[6] as HTMLElement).style.getPropertyValue('--y'),
+    ).toBe('-100%')
+    expect(
+      (digit.children[8] as HTMLElement).style.getPropertyValue('--y'),
+    ).toBe('100%')
   })
 
-  it('clears inline --y so a later non-animated value renders in place', () => {
+  // Regression: removing --y as soon as the digit's own spin settled left
+  // `translateY(var(--y))` invalid-at-computed-value-time on rAF-path
+  // browsers, stacking all ten numerals while is-spinning (removed on the
+  // flow-wide animationsfinish) still exposed them — e.g. whenever
+  // spinTiming is shorter than transformTiming, or a digit's delta is 0 in
+  // an interrupting update:
+  it('keeps resting --y while other channels are still animating', () => {
     const scope = {}
     const digit = document.createElement('span')
     digit.style.setProperty('--current', '7')
@@ -200,14 +212,22 @@ describe('rAF engine', () => {
       {[deltaVar]: [-4, 0]},
       {duration: 100, easing: 'linear'},
     )
+    animate(
+      scope,
+      digit,
+      {transform: ['translateX(10px)', 'none']},
+      {duration: 200, easing: 'linear'},
+    )
     step(0)
-    step(100) // settle on 7
-    // Now the value changes with no animation at all (hidden tab, reduced
-    // motion, animated={false}): only --current is updated:
-    digit.style.setProperty('--current', '6')
+    step(100) // the spin settles; the translate is still mid-flight
+    expect(
+      (digit.children[7] as HTMLElement).style.getPropertyValue('--y'),
+    ).toBe('0%')
     expect(
       (digit.children[6] as HTMLElement).style.getPropertyValue('--y'),
-    ).toBe('') // not the stale '-100%' from the spin
+    ).toBe('-100%')
+    step(100)
+    expect(digit.style.transform).toBe('')
   })
 
   it('supports finish-all and finished promises', async () => {

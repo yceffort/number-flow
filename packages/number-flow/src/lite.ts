@@ -804,6 +804,10 @@ export class Digit extends Char<KeyedDigitPart> {
 
   private _onAnimationsFinish = () => {
     this.el.classList.remove('is-spinning')
+    // The rAF engine keeps resting --y values inline while other digits may
+    // still be animating; once the whole flow settles, hand the numerals
+    // back to the stylesheet so nothing stale outranks it later:
+    this._numbers.forEach((num) => num.style.removeProperty('--y'))
   }
 }
 
