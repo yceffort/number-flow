@@ -34,6 +34,32 @@ export const widthDeltaVar = '--_number-flow-d-width'
 export const dxVar = '--_number-flow-dx'
 export const deltaVar = '--_number-flow-d'
 
+// An InvalidModificationError only proves the NAME is taken (e.g. by another
+// copy of this library) — not that it was registered with our descriptors.
+// They matter: the digit math needs `inherits: true` to reach the .digit__num
+// children, so a foreign incompatible registration must downgrade us to the
+// rAF engine. Probe the live registration's syntax + inheritance:
+const matchesRegistration = ({
+  name,
+  syntax,
+  inherits,
+  initialValue,
+}: PropertyDefinition) => {
+  const probe = syntax === '<length>' ? '7px' : '0.5'
+  const parent = document.createElement('div')
+  const child = parent.appendChild(document.createElement('div'))
+  parent.style.setProperty(name, probe)
+  document.documentElement.appendChild(parent)
+  const ok =
+    // A different syntax would reject our probe value and compute to its
+    // own initial value instead:
+    getComputedStyle(parent).getPropertyValue(name) === probe &&
+    getComputedStyle(child).getPropertyValue(name) ===
+      (inherits ? probe : initialValue)
+  parent.remove()
+  return ok
+}
+
 // Register one at a time: a name another copy of this library already
 // registered throws InvalidModificationError, which still means the browser
 // supports @property. Registering them as one batch would let that throw
@@ -43,10 +69,14 @@ const registerProperty = (definition: PropertyDefinition) => {
     CSS.registerProperty(definition)
     return true
   } catch (e) {
-    return (e as DOMException | undefined)?.name === 'InvalidModificationError'
+    if ((e as DOMException | undefined)?.name !== 'InvalidModificationError')
+      return false
+    return matchesRegistration(definition)
   }
 }
 
+// map() before every(): short-circuiting on a rejected definition would
+// leave the remaining properties unregistered:
 export const supportsAtProperty = [
   {
     name: opacityDeltaVar,
@@ -57,7 +87,9 @@ export const supportsAtProperty = [
   {name: dxVar, syntax: '<length>', inherits: true, initialValue: '0px'},
   {name: widthDeltaVar, syntax: '<number>', inherits: false, initialValue: '0'},
   {name: deltaVar, syntax: '<number>', inherits: true, initialValue: '0'},
-].every(registerProperty)
+]
+  .map(registerProperty)
+  .every(Boolean)
 
 // Don't use CSS.registerProperty for vars needed during SSR:
 
