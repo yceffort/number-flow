@@ -91,8 +91,14 @@ const affectedNative = (wk, engine) => {
 const KNOWN_FAILURES = [
   // 폭이 변할 때 .number 의 scaleX 트윈이 통째로 빠진다:
   {name: 'scenario1 number scales mid-flight', applies: affectedNative},
-  // 새로 등장하는 문자의 페이드인이 빠진다 (macOS 빌드에서만 재현):
-  {name: 'scenario1 new chars fade in mid-flight', applies: affectedNative},
+  // 새로 등장하는 문자의 페이드인이 빠진다. 같은 WebKit 버전이라도 macOS 빌드에서만
+  // 재현되고 CI 가 도는 Linux 빌드에서는 통과하므로, 통과했다고 해서 해소된 것은
+  // 아니다 — 해소 경고 대상에서 제외한다:
+  {
+    name: 'scenario1 new chars fade in mid-flight',
+    applies: affectedNative,
+    buildDependent: true,
+  },
 ]
 const isKnownFailure = (name, wk, engine) =>
   KNOWN_FAILURES.some((k) => k.name === name && k.applies(wk, engine))
@@ -138,8 +144,9 @@ async function runOne(version, port) {
       )
       known.forEach((f) => console.log(`    ~ (알려진 이슈) ${f.name}`))
       // 알려진 이슈로 등록해뒀는데 통과한다면 목록을 줄일 때가 된 것:
-      KNOWN_FAILURES.forEach(({name, applies}) => {
+      KNOWN_FAILURES.forEach(({name, applies, buildDependent}) => {
         if (
+          !buildDependent &&
           applies(wkVersion, engine) &&
           res.results.some((r) => r.name === name && r.pass)
         )
