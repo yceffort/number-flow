@@ -52,12 +52,19 @@ describe('renderFallbackStyles', () => {
     )
   })
 
-  it('rejects a suffix that could escape the selector or the <style> tag', () => {
-    expect(() => renderFallbackStyles('</style><script>')).toThrow(
-      /Invalid elementSuffix/,
-    )
-    expect(() => renderFallbackStyles('-a, body')).toThrow(
-      /Invalid elementSuffix/,
-    )
+  // Custom element names legally contain more than [a-z0-9-] — a downstream
+  // wrapper registering e.g. `number-flow_vue` must keep working:
+  it('keeps legal name characters like underscores', () => {
+    expect(renderFallbackStyles('_vue')).toContain('number-flow_vue > span')
+  })
+
+  it('escapes a suffix that could break out of the selector or the <style> tag', () => {
+    const styles = renderFallbackStyles('</style><script>')
+    expect(styles).not.toContain('</style')
+    expect(styles).not.toContain('<script')
+
+    const selector = renderFallbackStyles('-a, body')
+    expect(selector).not.toContain(', body')
+    expect(selector).toContain('number-flow-a\\2c \\20 body')
   })
 })

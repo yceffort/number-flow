@@ -68,25 +68,29 @@ const renderSection = (section: KeyedNumberPart[], part: string) =>
   `<span part="${part}">${section.reduce((str, p) => str + renderPart(p), '')}</span>`
 
 export const renderFallbackStyles = (elementSuffix = '') => {
-  // This lands in a selector inside a <style> tag; only allow what a custom
-  // element name can actually contain, so it can't break out:
-  if (!/^[a-z0-9-]*$/.test(elementSuffix))
-    throw new Error(
-      `[number-flow] Invalid elementSuffix "${elementSuffix}": expected only lowercase letters, digits and dashes.`,
-    )
+  // This lands in a selector inside a <style> tag. Custom element names can
+  // legally contain more than [a-z0-9-] (underscores, dots, most non-ASCII),
+  // and this sits on a render path — so instead of rejecting, hex-escape
+  // anything that isn't ident-safe (CSS.escape doesn't exist server-side).
+  // That keeps every legal name matchable while caller data can't break out
+  // of the selector or close the tag:
+  const suffix = elementSuffix.replace(
+    /[^a-zA-Z0-9_\u00A0-\uFFFF-]/g,
+    (c) => `\\${c.codePointAt(0)!.toString(16)} `,
+  )
   return css`
-    :where(number-flow${elementSuffix}) {
+    :where(number-flow${suffix}) {
       line-height: 1;
     }
 
-    number-flow${elementSuffix} > span {
+    number-flow${suffix} > span {
       font-kerning: none;
       display: inline-block;
       padding: ${maskHeightFallback} 0;
     }
 
     @supports (padding: round(nearest, 0.25em, 1px)) {
-      number-flow${elementSuffix} > span {
+      number-flow${suffix} > span {
         padding: ${maskHeight} 0;
       }
     }
