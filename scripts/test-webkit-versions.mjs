@@ -80,6 +80,23 @@ function ensurePlaywright(version) {
 // 이 호스트에서 그 시절 WebKit 을 못 띄우는 경우의 종료 코드 (검증 실패와 구분):
 const EXIT_SKIP = 2
 
+// WebKit 17.4~18.x 네이티브 경로의 엔진 버그로 실패하는 항목들.
+// 원본 number-flow 도 동일하게 실패하며 WebKit 26 에서 해소되었다 (README의
+// "Known issues" 참고). 여기 등록된 항목만 실패하면 잡을 통과시켜서, 진짜 회귀와
+// 이미 아는 결함을 구분한다. 해소된 항목은 실행 시 경고로 알려준다.
+const affectedNative = (wk, engine) => {
+  const v = parseFloat(wk)
+  return engine === 'auto' && v >= 17 && v < 26
+}
+const KNOWN_FAILURES = [
+  // 폭이 변할 때 .number 의 scaleX 트윈이 통째로 빠진다:
+  {name: 'scenario1 number scales mid-flight', applies: affectedNative},
+  // 새로 등장하는 문자의 페이드인이 빠진다 (macOS 빌드에서만 재현):
+  {name: 'scenario1 new chars fade in mid-flight', applies: affectedNative},
+]
+const isKnownFailure = (name, wk, engine) =>
+  KNOWN_FAILURES.some((k) => k.name === name && k.applies(wk, engine))
+
 async function runOne(version, port) {
   const pw = ensurePlaywright(version)
   let browser
@@ -108,15 +125,29 @@ async function runOne(version, port) {
         timeout: 30_000,
       })
       const res = await page.evaluate(() => window.__nfResults)
-      const fails = res.results.filter((r) => !r.pass)
+      const all = res.results.filter((r) => !r.pass)
+      const known = all.filter((f) => isKnownFailure(f.name, wkVersion, engine))
+      const fails = all.filter((f) => !known.includes(f))
+      const ok = !res.fatal && fails.length === 0
       console.log(
-        `  [WebKit ${wkVersion}/${engine}] ${res.pass ? 'PASS' : 'FAIL'} — 감지된 경로: ${res.env.supportsNativeAnimations ? '네이티브 WAAPI' : 'rAF 폴백'}, 검증 ${res.results.length}건 중 실패 ${fails.length}건`,
+        `  [WebKit ${wkVersion}/${engine}] ${ok ? 'PASS' : 'FAIL'} — 감지된 경로: ${res.env.supportsNativeAnimations ? '네이티브 WAAPI' : 'rAF 폴백'}, 검증 ${res.results.length}건 중 실패 ${fails.length}건${known.length ? ` (+ 알려진 이슈 ${known.length}건)` : ''}`,
       )
       if (res.fatal) console.log(`    fatal: ${res.fatal}`)
       fails.forEach((f) =>
         console.log(`    ✗ ${f.name} (${JSON.stringify(f.detail)})`),
       )
-      if (!res.pass) failed++
+      known.forEach((f) => console.log(`    ~ (알려진 이슈) ${f.name}`))
+      // 알려진 이슈로 등록해뒀는데 통과한다면 목록을 줄일 때가 된 것:
+      KNOWN_FAILURES.forEach(({name, applies}) => {
+        if (
+          applies(wkVersion, engine) &&
+          res.results.some((r) => r.name === name && r.pass)
+        )
+          console.log(
+            `    ! 알려진 이슈가 해소됨 — 목록에서 제거하세요: ${name}`,
+          )
+      })
+      if (!ok) failed++
     } catch (e) {
       failed++
       console.log(
