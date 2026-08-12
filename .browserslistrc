@@ -1,4 +1,6 @@
-# 라이브러리 지원 하한 (rAF 폴백 엔진 기준, 실바이너리 검증 완료 범위)
+# 라이브러리 지원 하한 (rAF 폴백 엔진 기준)
+# 실바이너리 검증은 Chromium 66+ / WebKit 16.4+까지. 그 아래(safari/ios 13~16.3)와
+# firefox/edge 하한은 eslint-plugin-compat 정적 검사 기준의 이론값이다 (README 참고).
 chrome >= 66
 safari >= 13
 ios_saf >= 13
