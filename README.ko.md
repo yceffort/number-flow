@@ -37,7 +37,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 ## 동작 방식
 
-- **모던 브라우저**: 원본과 완전히 동일한 네이티브 경로(WAAPI + `composite: 'accumulate'` + CSS `mod()` 수식). 컴포지터 스레드에서 실행되므로 성능 손실이 없습니다.
+- **모던 브라우저**: 원본과 완전히 동일한 네이티브 경로(WAAPI + `composite: 'accumulate'` + CSS `mod()` 수식). 브라우저 애니메이션 엔진이 매 프레임을 직접 구동하므로 프레임마다 JS가 개입하지 않습니다.
 - **구형 브라우저**: rAF 트윈 엔진이 WAAPI의 `composite: 'accumulate'` 시맨틱(활성 트윈들의 델타 합산)을 재현합니다.
   - 스프링 `linear()` easing은 90개 샘플 포인트를 보간해 **곡선까지 동일**하게 재생합니다. `cubic-bezier()`/키워드/`steps()`/사용자 지정 `linear()`도 파싱합니다.
   - `--_number-flow-dx`, `--scale-x` 등을 매 프레임 인라인 스타일로 기록해 원본 스타일시트가 그대로 소비합니다.
