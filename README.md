@@ -37,7 +37,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 ## How it works
 
-- **Modern browsers**: the exact same native path as upstream (WAAPI + `composite: 'accumulate'` + CSS `mod()` math). Runs on the compositor thread with zero performance cost.
+- **Modern browsers**: the exact same native path as upstream (WAAPI + `composite: 'accumulate'` + CSS `mod()` math). The browser's animation engine drives every frame, with no per-frame JavaScript.
 - **Older browsers**: an rAF tween engine replicates WAAPI's `composite: 'accumulate'` semantics (summing the deltas of all active tweens).
   - The spring `linear()` easing is interpolated from its 90 sample points, so **even the curve is identical**. `cubic-bezier()`, keywords, `steps()`, and custom `linear()` strings are parsed too.
   - `--_number-flow-dx`, `--scale-x`, etc. are written as inline styles every frame, so the upstream stylesheet consumes them unchanged.
