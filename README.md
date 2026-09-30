@@ -80,7 +80,9 @@ Below the floor there is no graceful degradation — updates throw. Chrome 64–
 
 ## Differences from upstream (honest limitations)
 
-- The fallback path runs on the **main thread**, so frames can drop when the main thread is very busy. Modern browsers use the native path and are unaffected.
+- The fallback path runs on the **main thread**, so frames can drop when the main thread is very busy. The native path runs on the compositor, except in the next two cases and for the `::part()` and timing exceptions in [How it works](#how-it-works).
+- On the native path, an update that interrupts running animations re-bakes what is left of them, so it costs more main-thread time up front (about 15ms per update instead of 5ms in the 300ms-interrupt benchmark, 1x, Apple M5).
+- With proportional digits most updates change the number's width, and the mask's fade then animates on the main thread for part of each animation. `font-variant-numeric: tabular-nums` avoids that (59 vs 14 ms/s of main-thread time in the issue benchmark at 1x).
 - In the fallback, `EffectTiming` supports only `duration`/`delay`/`easing` (`iterations` etc. are ignored).
 - On browsers without `mix-blend-mode: plus-lighter`, the ± sign crossfade degrades slightly to a plain fade.
 - Vue/Svelte wrappers are not ported yet (the core is identical, so they can be added following the upstream wrappers).
