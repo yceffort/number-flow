@@ -80,26 +80,12 @@ function ensurePlaywright(version) {
 // 이 호스트에서 그 시절 WebKit 을 못 띄우는 경우의 종료 코드 (검증 실패와 구분):
 const EXIT_SKIP = 2
 
-// WebKit 17.4~18.x 네이티브 경로의 엔진 버그로 실패하는 항목들.
-// 원본 number-flow 도 동일하게 실패하며 WebKit 26 에서 해소되었다 (README의
-// "Known issues" 참고). 여기 등록된 항목만 실패하면 잡을 통과시켜서, 진짜 회귀와
+// 엔진 버그로 실패하는 것이 확인된 항목들: {name, applies(wk, engine),
+// buildDependent?}. 여기 등록된 항목만 실패하면 잡을 통과시켜서, 진짜 회귀와
 // 이미 아는 결함을 구분한다. 해소된 항목은 실행 시 경고로 알려준다.
-const affectedNative = (wk, engine) => {
-  const v = parseFloat(wk)
-  return engine === 'auto' && v >= 17 && v < 26
-}
-const KNOWN_FAILURES = [
-  // 폭이 변할 때 .number 의 scaleX 트윈이 통째로 빠진다:
-  {name: 'scenario1 number scales mid-flight', applies: affectedNative},
-  // 새로 등장하는 문자의 페이드인이 빠진다. 같은 WebKit 버전이라도 macOS 빌드에서만
-  // 재현되고 CI 가 도는 Linux 빌드에서는 통과하므로, 통과했다고 해서 해소된 것은
-  // 아니다 — 해소 경고 대상에서 제외한다:
-  {
-    name: 'scenario1 new chars fade in mid-flight',
-    applies: affectedNative,
-    buildDependent: true,
-  },
-]
+// (WebKit 17.4~18.x 의 폭 스케일/등장 페이드 누락은 네이티브 경로가 transform/
+// opacity 를 직접 애니메이션하면서 해소되어 목록에서 뺐다. README 참고.)
+const KNOWN_FAILURES = []
 const isKnownFailure = (name, wk, engine) =>
   KNOWN_FAILURES.some((k) => k.name === name && k.applies(wk, engine))
 
