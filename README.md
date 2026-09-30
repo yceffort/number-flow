@@ -25,7 +25,7 @@ The API is identical to upstream. Existing projects can switch without any code 
 ```jsonc
 // package.json — drop-in replacement, zero code changes
 "dependencies": {
-  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.1.0"
+  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.2.0"
 }
 ```
 
