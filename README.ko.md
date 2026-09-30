@@ -9,7 +9,7 @@
 
 **라이브 데모**: [Storybook](https://yceffort.github.io/number-flow/) — 기본/통화/백분율/실시간 티커/인터럽트/rAF 폴백 강제/그룹/Continuous 플러그인 스토리를 직접 조작해볼 수 있습니다.
 
-> **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅·DOM 구조·스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체해 **구형 브라우저에서도 동일한 애니메이션이 동작**하도록 확장했습니다.
+> **Fork notice**: 이 프로젝트는 [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian)의 포크입니다. 포맷팅, DOM 구조, 스타일은 원본을 유지하고, 애니메이션 구동부를 하이브리드(WAAPI/rAF) 엔진으로 교체했습니다. 그래서 **구형 브라우저에서도 동일한 애니메이션이 동작**하고, 모던 브라우저에서는 매 프레임 메인 스레드에서 모든 자릿수의 스타일을 다시 계산하는 대신 **컴포지터에서 실행**됩니다.
 
 원본은 `linear()` easing(Safari 17.2+/Chrome 113+), CSS `mod()`/`round()`(Safari 15.4+/Chrome 125+), `@property`가 모두 지원될 때만 애니메이션을 켜고, 하나라도 없으면 숫자가 즉시 교체됩니다. 이 포크는 그 세 가지가 없어도 rAF 기반 폴백 엔진으로 동일한 스프링 애니메이션을 재현합니다.
 

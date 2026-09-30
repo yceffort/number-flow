@@ -1,6 +1,6 @@
 # @yceffort/number-flow-react
 
-A drop-in compatible fork of [@number-flow/react](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian). Its hybrid (WAAPI/rAF) engine keeps **the same animations working down to Chrome 66 / iOS ~13**.
+A drop-in compatible fork of [@number-flow/react](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian). Its hybrid (WAAPI/rAF) engine keeps **the same animations working down to Chrome 66 / iOS ~13**, and on modern browsers **runs them on the compositor** instead of restyling every digit on the main thread each frame.
 
 ```bash
 npm install @yceffort/number-flow-react

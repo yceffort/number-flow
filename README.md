@@ -7,7 +7,7 @@
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-> **Fork notice**: This is a fork of [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian). The formatting, DOM structure, and styles are kept from upstream; the animation driver is replaced with a hybrid (WAAPI/rAF) engine so that **the same animations work on much older browsers**.
+> **Fork notice**: This is a fork of [barvian/number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian). The formatting, DOM structure, and styles are kept from upstream; the animation driver is replaced with a hybrid (WAAPI/rAF) engine, so the same animations **work on much older browsers** and, on modern ones, **run on the compositor** instead of restyling every digit on the main thread each frame.
 
 **Live demo**: [Storybook](https://yceffort.github.io/number-flow/) — eight stories covering basic / currency / percentage / live ticker / interrupt / forced rAF / group / the continuous plugin (the sidebar names are in Korean).
 
