@@ -25,7 +25,7 @@ API는 원본과 동일합니다. 기존 프로젝트라면 alias로 코드 수�
 ```jsonc
 // package.json — 코드 무수정 드롭인 교체
 "dependencies": {
-  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.1.0"
+  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.2.0"
 }
 ```
 

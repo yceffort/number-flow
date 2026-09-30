@@ -15,7 +15,7 @@ Existing projects can switch without any code changes via an alias:
 
 ```jsonc
 "dependencies": {
-  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.1.0"
+  "@number-flow/react": "npm:@yceffort/number-flow-react@^0.2.0"
 }
 ```
 

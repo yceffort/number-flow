@@ -1,6 +1,6 @@
 {
   "name": "@yceffort/number-flow-react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React wrapper for @yceffort/number-flow. Drop-in compatible fork of @number-flow/react with extended browser support.",
   "author": {
     "name": "yceffort",
