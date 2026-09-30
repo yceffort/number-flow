@@ -195,6 +195,13 @@ const styles = css`
       translateX(calc(-1 * var(${dxVar})));
   }
 
+  /* Only .number and .number__inner read these. Stopping them here keeps an
+     animating width or offset from restyling every digit on every frame: */
+  .number__inner > .section {
+    --scale-x: 1;
+    ${dxVar}: 0px;
+  }
+
   /* Put number underneath other sections. Negative z-index messed up text cursor and selection, weirdly: */
   :host > :not(.number) {
     z-index: 5;
