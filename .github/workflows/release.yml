@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release (e.g. v0.2.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm
+        run: npm install -g npm@11
+
+      - name: Check the tag matches both packages
+        run: |
+          for pkg in packages/number-flow packages/react; do
+            version=$(node -p "require('./$pkg/package.json').version")
+            if [ "v$version" != "$TAG" ]; then
+              echo "::error::$pkg is $version but the tag is $TAG"
+              exit 1
+            fi
+          done
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Publish to npm
+        run: |
+          for pkg in packages/number-flow packages/react; do
+            name=$(node -p "require('./$pkg/package.json').name")
+            if npm view "$name@${TAG#v}" version >/dev/null 2>&1; then
+              echo "$name@${TAG#v} is already on npm, skipping"
+              continue
+            fi
+            tarball=$(cd "$pkg" && pnpm pack --pack-destination "$RUNNER_TEMP" --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).filename")
+            npm publish "$tarball" --access public
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          fi
