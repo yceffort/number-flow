@@ -1,6 +1,6 @@
 # @yceffort/number-flow
 
-A fork of [number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian) with a hybrid (WAAPI/rAF) animation engine, so **the same spring animations keep working down to Chrome 66 / iOS ~13**. The API is a drop-in match for upstream `number-flow`.
+A fork of [number-flow](https://github.com/barvian/number-flow) (MIT, © Maxwell Barvian) with a hybrid (WAAPI/rAF) animation engine, so **the same spring animations keep working down to Chrome 66 / iOS ~13**, and on modern browsers they **run on the compositor** instead of restyling every digit on the main thread each frame. The API is a drop-in match for upstream `number-flow`.
 
 ```bash
 npm install @yceffort/number-flow

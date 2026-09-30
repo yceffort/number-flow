@@ -1,5 +1,15 @@
 export type EasingFn = (t: number) => number
 
+export type EasingInfo = {
+  fn: EasingFn
+  // Input positions of a piecewise-linear easing's points (null for curves):
+  stops: number[] | null
+  // Whether the output can leave [0, 1]:
+  overshoots: boolean
+  // steps(): jumps instead of interpolating
+  discrete?: boolean
+}
+
 const linear: EasingFn = (t) => t
 
 // Newton-Raphson + bisection fallback, based on the standard bezier-easing algorithm:
@@ -52,7 +62,7 @@ export const cubicBezier = (
 type LinearStop = {v: number; pos: number | null}
 
 // Parses the body of linear(...) per the CSS spec (values with optional percentages):
-const parseLinearBody = (body: string): EasingFn | null => {
+const parseLinearBody = (body: string): EasingInfo | null => {
   const stops: LinearStop[] = []
   for (const entry of body.split(',')) {
     const tokens = entry.trim().split(/\s+/).filter(Boolean)
@@ -91,7 +101,7 @@ const parseLinearBody = (body: string): EasingFn | null => {
   }
 
   const points = stops as Array<{v: number; pos: number}>
-  return (t) => {
+  const fn: EasingFn = (t) => {
     if (t <= points[0]!.pos) return points[0]!.v
     if (t >= points[points.length - 1]!.pos) return points[points.length - 1]!.v
     // Binary search for the segment:
@@ -106,6 +116,11 @@ const parseLinearBody = (body: string): EasingFn | null => {
       b = points[hi]!
     if (b.pos === a.pos) return b.v
     return a.v + ((b.v - a.v) * (t - a.pos)) / (b.pos - a.pos)
+  }
+  return {
+    fn,
+    stops: points.map((p) => p.pos),
+    overshoots: points.some((p) => p.v < 0 || p.v > 1),
   }
 }
 
@@ -128,64 +143,89 @@ const steps =
     }
   }
 
-const KEYWORDS: Record<string, () => EasingFn> = {
-  linear: () => linear,
-  ease: () => cubicBezier(0.25, 0.1, 0.25, 1),
-  'ease-in': () => cubicBezier(0.42, 0, 1, 1),
-  'ease-out': () => cubicBezier(0, 0, 0.58, 1),
-  'ease-in-out': () => cubicBezier(0.42, 0, 0.58, 1),
-  'step-start': () => steps(1, 'start'),
-  'step-end': () => steps(1, 'end'),
+const bezier = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): EasingInfo => ({
+  fn: cubicBezier(x1, y1, x2, y2),
+  stops: x1 === y1 && x2 === y2 ? [0, 1] : null,
+  overshoots: y1 < 0 || y1 > 1 || y2 < 0 || y2 > 1,
+})
+
+const stepped = (count: number, position: string): EasingInfo => ({
+  fn: steps(count, position),
+  stops: null,
+  overshoots: false,
+  discrete: true,
+})
+
+const KEYWORDS: Record<string, () => EasingInfo> = {
+  linear: () => ({fn: linear, stops: [0, 1], overshoots: false}),
+  ease: () => bezier(0.25, 0.1, 0.25, 1),
+  'ease-in': () => bezier(0.42, 0, 1, 1),
+  'ease-out': () => bezier(0, 0, 0.58, 1),
+  'ease-in-out': () => bezier(0.42, 0, 0.58, 1),
+  'step-start': () => stepped(1, 'start'),
+  'step-end': () => stepped(1, 'end'),
 }
 
-const cache = new Map<string, EasingFn>()
+const parse = (easing: string): EasingInfo | null => {
+  const trimmed = easing.trim()
+  const keyword = KEYWORDS[trimmed]
+  if (keyword) return keyword()
+  const match = /^([a-z-]+)\((.*)\)$/i.exec(trimmed)
+  if (!match) return null
+  const [, name, body] = match
+  if (name === 'linear') return parseLinearBody(body!)
+  if (name === 'cubic-bezier') {
+    const args = body!.split(',').map((s) => parseFloat(s))
+    if (args.length === 4 && args.every((n) => !isNaN(n)))
+      return bezier(args[0]!, args[1]!, args[2]!, args[3]!)
+  } else if (name === 'steps') {
+    const [countStr, pos] = body!.split(',').map((s) => s.trim())
+    const count = parseInt(countStr!)
+    // steps(1, jump-none) is invalid per spec, and its step/(count-1)
+    // would divide by zero and write NaN into inline styles:
+    if (count > 0 && !(count === 1 && pos === 'jump-none'))
+      return stepped(count, pos ?? 'end')
+  }
+  return null
+}
+
+const cache = new Map<string, EasingInfo | null>()
 // Easings are near-constant in practice, but a caller generating them per
 // value (e.g. a computed spring) shouldn't be able to grow this forever:
 const CACHE_MAX = 64
 let warned = false
 
-export const parseEasing = (easing?: string): EasingFn => {
-  if (!easing) return linear
-  const cached = cache.get(easing)
-  if (cached) return cached
-
-  let fn: EasingFn | null = null
-  const trimmed = easing.trim()
-  const keyword = KEYWORDS[trimmed]
-  if (keyword) fn = keyword()
-  else {
-    const match = /^([a-z-]+)\((.*)\)$/i.exec(trimmed)
-    if (match) {
-      const [, name, body] = match
-      if (name === 'linear') fn = parseLinearBody(body!)
-      else if (name === 'cubic-bezier') {
-        const args = body!.split(',').map((s) => parseFloat(s))
-        if (args.length === 4 && args.every((n) => !isNaN(n)))
-          fn = cubicBezier(args[0]!, args[1]!, args[2]!, args[3]!)
-      } else if (name === 'steps') {
-        const [countStr, pos] = body!.split(',').map((s) => s.trim())
-        const count = parseInt(countStr!)
-        // steps(1, jump-none) is invalid per spec, and its step/(count-1)
-        // would divide by zero and write NaN into inline styles:
-        if (count > 0 && !(count === 1 && pos === 'jump-none'))
-          fn = steps(count, pos ?? 'end')
-      }
-    }
-  }
-
-  if (!fn) {
-    if (!warned) {
-      warned = true
-      console.warn(
-        `[number-flow] Unsupported easing "${easing}", falling back to linear.`,
-      )
-    }
-    fn = linear
-  }
+const lookup = (easing: string): EasingInfo | null => {
+  if (cache.has(easing)) return cache.get(easing)!
+  const info = parse(easing)
   // Evict the oldest entry rather than clearing: a per-value caller at
   // capacity would otherwise wipe the whole cache — including the hot
   // default spring — on every new easing and degrade to a ~0% hit rate:
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!)
-  cache.set(easing, fn)
-  return fn
+  cache.set(easing, info)
+  return info
+}
+
+export const parseEasing = (easing?: string): EasingFn => {
+  if (!easing) return linear
+  const info = lookup(easing)
+  if (info) return info.fn
+  if (!warned) {
+    warned = true
+    console.warn(
+      `[number-flow] Unsupported easing "${easing}", falling back to linear.`,
+    )
+  }
+  return linear
+}
+
+/** Parsed easing for the compositor path, or null if it can't be reproduced exactly. */
+export const easingInfo = (easing: string): EasingInfo | null => {
+  const info = lookup(easing)
+  return info && !info.discrete ? info : null
 }

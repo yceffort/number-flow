@@ -1,6 +1,13 @@
 import {BROWSER} from 'esm-env'
 
-import {animate, finishAll, finishedOf, usesNativeEngine} from './engine'
+import {
+  animate,
+  discard,
+  finishAll,
+  finishedOf,
+  flush,
+  usesNativeEngine,
+} from './engine'
 import {
   type KeyedDigitPart,
   type KeyedNumberPart,
@@ -114,9 +121,10 @@ export default class NumberFlowLite
     if (this.animated === val) return
     this._animated = val
     // Finish any in-flight animations (instead of cancel, which won't trigger their finish events):
-    if (usesNativeEngine())
+    if (usesNativeEngine()) {
+      discard(this)
       this.shadowRoot?.getAnimations().forEach((a) => a.finish())
-    else finishAll(this)
+    } else finishAll(this)
   }
 
   readonly created: boolean = false
@@ -239,6 +247,9 @@ export default class NumberFlowLite
    * @internal
    */
   willUpdate() {
+    // Animations queued by an update whose didUpdate never ran (e.g. a
+    // grouped flow disconnected in between) must not leak into this one:
+    discard(this)
     // Skip the measurement pass when animations can't run: it reads layout
     // (a forced reflow) for every section and digit, and didUpdate — its only
     // consumer — would discard the measurements anyway
@@ -271,9 +282,10 @@ export default class NumberFlowLite
       // A non-animated update landing mid-flight (hidden tab, reduced
       // motion, invisible element) must not leave the old tweens running:
       // they'd keep deriving offsets from the already-updated --current:
-      if (usesNativeEngine())
+      if (usesNativeEngine()) {
+        discard(this)
         this.shadowRoot?.getAnimations().forEach((a) => a.finish())
-      else finishAll(this)
+      } else finishAll(this)
       return
     }
 
@@ -285,6 +297,7 @@ export default class NumberFlowLite
     this._pre!.didUpdate()
     this._num!.didUpdate()
     this._post!.didUpdate()
+    if (usesNativeEngine()) flush(this)
 
     const controller = new AbortController()
     const finished = usesNativeEngine()

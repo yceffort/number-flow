@@ -7,7 +7,11 @@ import {
   opacityDeltaVar,
   deltaVar,
 } from '../styles'
+import {digitYPercent, queue} from './compositor'
 import {parseEasing, type EasingFn} from './easing'
+
+export {digitYPercent}
+export {flush, discard} from './compositor'
 
 /**
  * Whether the browser can run the original, fully-native animation path
@@ -37,16 +41,8 @@ export const usesNativeEngine = () =>
 
 const clamp = (min: number, n: number, max: number) =>
   Math.max(min, Math.min(n, max))
-const cssMod = (a: number, m: number) => ((a % m) + m) % m
 
 type Applier = (el: HTMLElement, total: number, idle: boolean) => void
-
-// JS port of the .digit__num CSS formula from styles.ts (mod()/round() math):
-export const digitYPercent = (c: number, length: number, n: number): number => {
-  const raw = cssMod(length + n - cssMod(c, length), length)
-  const offset = raw - length * Math.floor(raw / (length / 2))
-  return clamp(-1, offset, 1) * 100
-}
 
 const appliers: Record<string, Applier> = {
   transform: (el, total, idle) => {
@@ -197,10 +193,8 @@ export const animate = (
   timing: EffectTiming,
 ) => {
   if (usesNativeEngine()) {
-    el.animate(keyframes as PropertyIndexedKeyframes, {
-      ...timing,
-      composite: 'accumulate',
-    })
+    // Committed together at the end of the update by flush():
+    queue(scope, el, keyframes as PropertyIndexedKeyframes, timing)
     return
   }
 
