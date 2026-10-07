@@ -62,13 +62,13 @@ The floor is enforced three ways: a `.browserslistrc` declaration, an `eslint-pl
 
 - **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: auto-detects the rAF fallback, 44 assertions PASS
 - **WebKit 16.4** (≈ iOS/macOS Safari 16.4): auto-detects the rAF fallback, PASS — animates where upstream turns animations off
-- **WebKit 17.4 / 18.2**: native path, 44 of 44 on macOS builds. Upstream fails the width-scale (and, on macOS, enter-fade) assertions there; see [Known issues](#known-issues)
+- **WebKit 17.4 / 18.2**: native path, 44 of 44 on macOS builds. Upstream fails the width-scale (and, on macOS, enter-fade) assertions there even though both effects render; see [Known issues](#known-issues)
 - **Latest Chromium / Firefox / WebKit 26.x**: PASS on both native and forced-rAF paths
 - **Next.js 16 (React 19) SSR**: server markup + hydration smoke PASS
 
 ### If something breaks anyway
 
-Within the supported range, a misbehaving animation API degrades to a static-but-correct render, not a missing number. The value is always real DOM text (every digit keeps its 0–9 numerals and only the current one is shown), a failed transform computes to `none` (in place), and a failed enter fade leaves opacity at its initial `1` (shown immediately). The Safari 17.4 through 18.x `var()` bug below is the real-world example: upstream loses two visual effects there while values, layout, and accessibility stay correct. With SSR, the server-rendered fallback `<span>` also survives any client-side failure.
+Within the supported range, a misbehaving animation API degrades to a static-but-correct render, not a missing number. The value is always real DOM text (every digit keeps its 0–9 numerals and only the current one is shown), a failed transform computes to `none` (in place), and a failed enter fade leaves opacity at its initial `1` (shown immediately). With SSR, the server-rendered fallback `<span>` also survives any client-side failure.
 
 Below the floor there is no graceful degradation — updates throw. Chrome 64–65 lack `AbortController`, so an animated update throws right after the new value lands in the DOM (in React, an error boundary may then unmount the tree), and below Chrome 64/Safari 13 `formatToParts` is missing, so nothing renders client-side at all. If you need to reach lower than the floor, gate usage yourself.
 
@@ -91,7 +91,7 @@ Below the floor there is no graceful degradation — updates throw. Chrome 64–
 
 None open.
 
-Safari 17.4 through 18.x drops upstream's width-scale tween and enter fade. It's a WebKit bug, fixed in WebKit 26: once three or more animations run in the same shadow root, the animated value of a registered custom property stops reaching `var()` substitution in other properties of the same element, and upstream derives both effects that way (`--scale-x` from `--_number-flow-d-width`, the fade from `--_number-flow-d-opacity`). This fork's native path animates `transform` and `opacity` directly, so both play there too.
+On Safari 17.4 through 18.x, upstream (and this fork before 0.2.0) fails the selftest's width-scale and enter-fade assertions, but both effects render. The assertions read `getComputedStyle()`, and on those WebKit builds, once three or more animations run in the same shadow root, a `transform` or `opacity` derived through `var()` from an animated registered custom property is reported as its static declared value (`--scale-x` from `--_number-flow-d-width`, the fade from `--_number-flow-d-opacity`). Screenshots and playback recordings of the same scenes show the width scale, the mask correction, and the enter fade drawn as on WebKit 26, which also reports the animated values. See the [measurements](https://github.com/yceffort/blog-experiments/tree/main/number-flow-webkit-mask), made on the macOS WebKit builds that Playwright ships rather than Safari itself. This fork's native path animates `transform` and `opacity` directly, so `getComputedStyle()` reports the animated values on 17.4 and 18.2 as well.
 
 `pnpm test:webkit` runs the selftest on WebKit 16.4, 17.4 and 18.2 builds. The runner can keep assertions that fail because of an engine bug in a known-failure list (now empty), so the `old-webkit` CI job stays green while only those fail and anything else counts as a regression. It says so when a listed assertion starts passing. Versions whose WebKit build can't launch on the runner report `SKIP` instead of counting as failures.
 
