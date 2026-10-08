@@ -62,13 +62,13 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 - **Chromium 66 / 71 / 75 / 80 / 87 / 92 / 100 / 114**: 자동 감지로 rAF 폴백 선택, 시나리오 44건 PASS
 - **WebKit 16.4** (iOS/macOS Safari 16.4 상당): rAF 폴백 자동 선택, PASS — 원본이 애니메이션을 끄는 버전에서 동작
-- **WebKit 17.4 / 18.2**: 네이티브 경로에서 macOS 빌드 44건 전부 PASS. 원본은 이 버전에서 폭 스케일(및 macOS에서는 등장 페이드인) 검증이 실패합니다. [알려진 이슈](#알려진-이슈) 참고
+- **WebKit 17.4 / 18.2**: 네이티브 경로에서 macOS 빌드 44건 전부 PASS. 원본은 이 버전에서 폭 스케일(및 macOS에서는 등장 페이드인) 검증이 실패하지만, 두 효과는 화면에 그려집니다. [알려진 이슈](#알려진-이슈) 참고
 - **최신 Chromium / Firefox / WebKit 26.x**: 네이티브·rAF 강제 모두 PASS
 - **Next.js 16 (React 19) SSR**: 서버 마크업 + 히드레이션 스모크 PASS
 
 ### 그래도 뭔가 깨진다면
 
-지원 범위 안에서는 애니메이션 API가 오동작해도 "숫자가 안 보이는" 방향이 아니라 "정적이지만 정확한 렌더링"으로 열화됩니다. 값은 항상 실제 DOM 텍스트이고(각 자릿수가 0–9 numeral을 모두 갖고 현재 값만 표시), transform 계산이 실패하면 `none`(제자리)으로, 등장 페이드가 실패하면 opacity 초깃값 `1`(즉시 표시)로 계산됩니다. 아래 Safari 17.4~18.x `var()` 버그가 실제 사례로, 원본은 거기서 시각 효과 두 개를 잃지만 값, 레이아웃, 접근성은 정상입니다. SSR을 쓰면 서버가 그린 폴백 `<span>`이 클라이언트 실패와 무관하게 남습니다.
+지원 범위 안에서는 애니메이션 API가 오동작해도 "숫자가 안 보이는" 방향이 아니라 "정적이지만 정확한 렌더링"으로 열화됩니다. 값은 항상 실제 DOM 텍스트이고(각 자릿수가 0–9 numeral을 모두 갖고 현재 값만 표시), transform 계산이 실패하면 `none`(제자리)으로, 등장 페이드가 실패하면 opacity 초깃값 `1`(즉시 표시)로 계산됩니다. SSR을 쓰면 서버가 그린 폴백 `<span>`이 클라이언트 실패와 무관하게 남습니다.
 
 하한 미만에서는 우아한 강등이 없습니다 — 업데이트가 예외를 던집니다. Chrome 64~65는 `AbortController`가 없어 애니메이션 업데이트가 새 값이 DOM에 반영된 직후 throw하고(React라면 에러 바운더리가 트리를 내릴 수 있음), Chrome 64/Safari 13 미만은 `formatToParts`가 없어 클라이언트에서는 아무것도 렌더되지 않습니다. 하한보다 아래를 지원해야 한다면 사용처에서 직접 가드하세요.
 
@@ -91,7 +91,7 @@ import NumberFlow from '@yceffort/number-flow-react'
 
 현재 열린 이슈는 없습니다.
 
-Safari 17.4 ~ 18.x에서는 원본의 폭 스케일 트윈과 등장 페이드인이 빠집니다. WebKit 26에서 고쳐진 WebKit 버그입니다. 같은 shadow root 안에서 애니메이션이 3개 이상 돌면, 등록된 커스텀 프로퍼티의 애니메이션 값이 같은 요소의 다른 속성 `var()` 치환에 반영되지 않는데, 원본은 두 효과를 모두 이 방식으로 계산합니다(`--_number-flow-d-width`에서 `--scale-x`, `--_number-flow-d-opacity`에서 페이드). 이 포크의 네이티브 경로는 `transform`과 `opacity`를 직접 애니메이션하므로 이 버전에서도 두 효과가 모두 동작합니다.
+Safari 17.4 ~ 18.x에서는 원본(과 0.2.0 이전의 이 포크)이 selftest의 폭 스케일과 등장 페이드인 검증에 실패하지만, 두 효과는 화면에 그려집니다. 이 검증은 `getComputedStyle()`로 값을 읽는데, 이 WebKit 빌드들은 같은 shadow root 안에서 애니메이션이 3개 이상 돌면 애니메이션 중인 등록 커스텀 프로퍼티를 `var()`로 쓰는 `transform`과 `opacity`를 정적 선언값으로 보고합니다(`--_number-flow-d-width`에서 `--scale-x`, `--_number-flow-d-opacity`에서 페이드). 같은 장면을 스크린샷과 재생 녹화로 재 보면 폭 스케일, 마스크 보정, 등장 페이드인이 WebKit 26과 같이 그려지고, WebKit 26은 `getComputedStyle()`도 애니메이션 값을 보고합니다. [측정 내용](https://github.com/yceffort/blog-experiments/tree/main/number-flow-webkit-mask)은 Safari 자체가 아니라 Playwright가 배포한 macOS용 WebKit 빌드에서 잰 것입니다. 이 포크의 네이티브 경로는 `transform`과 `opacity`를 직접 애니메이션하므로 17.4와 18.2에서도 `getComputedStyle()`이 애니메이션 값을 보고합니다.
 
 `pnpm test:webkit`은 WebKit 16.4, 17.4, 18.2 빌드에서 selftest를 돌립니다. 러너는 엔진 버그로 실패하는 검증 항목을 알려진 실패 목록(현재 비어 있음)으로 관리할 수 있어서, 그 항목들만 실패하는 동안에는 `old-webkit` CI 잡이 통과하고 그 외의 실패는 회귀로 잡힙니다. 목록의 항목이 통과하기 시작하면 러너가 알려줍니다. 러너에서 해당 WebKit 빌드를 띄울 수 없는 버전은 실패가 아니라 `SKIP`으로 보고합니다.
 
