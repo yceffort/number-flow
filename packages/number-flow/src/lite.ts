@@ -2,10 +2,12 @@ import {BROWSER} from 'esm-env'
 
 import {
   animate,
+  animationsOf,
   discard,
   finishAll,
   finishedOf,
   flush,
+  prepare,
   usesNativeEngine,
 } from './engine'
 import {
@@ -304,15 +306,17 @@ export default class NumberFlowLite
     // Otherwise, dispatch a start event:
     else this.dispatchEvent(new Event('animationsstart'))
 
-    // Measure every section and char before any of them writes to the DOM:
+    // Measure every section and char (and what the engine will need) before
+    // any of them writes to the DOM:
     const sections = [this._pre!, this._num!, this._post!]
     const commits = sections.map((s) => s.measure())
+    if (usesNativeEngine()) prepare(this)
     commits.forEach((commit) => commit())
     if (usesNativeEngine()) flush(this)
 
     const controller = new AbortController()
     const finished = usesNativeEngine()
-      ? this.shadowRoot!.getAnimations().map((a) => a.finished)
+      ? animationsOf(this).map((a) => a.finished)
       : finishedOf(this)
     Promise.all(finished).then(() => {
       if (!controller.signal.aborted) {

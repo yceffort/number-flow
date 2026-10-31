@@ -25,6 +25,12 @@ const fmt = new Intl.NumberFormat('en-US')
 const set = (el: TestFlow, value: number) => {
   el.data = formatToData(value, fmt)
 }
+// Prefix and suffix included, like the #17 setup:
+const pct = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  signDisplay: 'always',
+  maximumFractionDigits: 0,
+})
 
 const digits = (el: TestFlow) =>
   Array.from(el.shadowRoot!.querySelectorAll<HTMLElement>('.digit'))
@@ -37,6 +43,8 @@ type LayoutGetter = (el: HTMLElement, original: () => unknown) => unknown
 
 // Popped chars are absolutely positioned, i.e. out of the flow:
 const inFlow = (c: Element) => !c.hasAttribute('inert')
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 // Replaces HTMLElement layout getters (offsetWidth etc.) while fn() runs:
 const withLayout = (getters: Record<string, LayoutGetter>, fn: () => void) => {
@@ -86,22 +94,33 @@ const forcedLayouts = (el: TestFlow, fn: () => void) => {
       return rect.call(this)
     },
   )
+  // Resolving a computed value also flushes pending style changes (it may be
+  // a spy from the native suite, so wrap by assignment, not vi.spyOn):
+  const computed = window.getComputedStyle
+  window.getComputedStyle = (...args) => {
+    read()
+    return computed.apply(window, args)
+  }
   const counting: LayoutGetter = (_el, original) => {
     read()
     return original()
   }
 
   observer.takeRecords() // writes before fn() aren't its fault
-  withLayout(
-    {
-      offsetWidth: counting,
-      offsetHeight: counting,
-      offsetTop: counting,
-      offsetLeft: counting,
-    },
-    fn,
-  )
-  observer.disconnect()
+  try {
+    withLayout(
+      {
+        offsetWidth: counting,
+        offsetHeight: counting,
+        offsetTop: counting,
+        offsetLeft: counting,
+      },
+      fn,
+    )
+  } finally {
+    window.getComputedStyle = computed
+    observer.disconnect()
+  }
   return forced
 }
 
@@ -276,11 +295,6 @@ describe('NumberFlowLite (rAF engine)', () => {
 
   // Regression for yceffort/number-flow#17: reads and writes used to
   // interleave per section and per digit, forcing a layout for each.
-  const pct = new Intl.NumberFormat('en-US', {
-    style: 'percent',
-    signDisplay: 'always',
-    maximumFractionDigits: 0,
-  })
   it.each([
     {
       name: 'same length', // +123,456,789% -> +987,654,321%
@@ -360,5 +374,117 @@ describe('NumberFlowLite (rAF engine)', () => {
     const [comma] = symbols(el)
     expect(one!.style.right).toBe('80px') // 100 - 20 - 0
     expect(comma!.style.right).toBe('60px') // 100 - 20 - 20
+  })
+})
+
+describe('NumberFlowLite (native engine)', () => {
+  // jsdom has no Web Animations; stand in just enough for the compositor
+  // path, with `finished` resolving on finish():
+  type Fake = {
+    el: HTMLElement
+    startTime: number | null
+    playState: string
+    currentTime: number
+    finished: Promise<void>
+    finish: () => void
+  }
+  let now = 0
+  let anims: Fake[] = []
+
+  beforeEach(() => {
+    setEngineMode('native')
+    now = 1000
+    anims = []
+    vi.stubGlobal('requestAnimationFrame', () => 0) // canAnimate
+    Object.defineProperty(document, 'timeline', {
+      configurable: true,
+      get: () => ({currentTime: now}),
+    })
+    HTMLElement.prototype.animate = function (this: HTMLElement) {
+      let resolve!: () => void
+      const a: Fake = {
+        el: this,
+        startTime: null,
+        playState: 'running',
+        get currentTime() {
+          return this.startTime == null ? 0 : now - this.startTime
+        },
+        finished: new Promise<void>((r) => (resolve = r)),
+        finish() {
+          this.playState = 'finished'
+          resolve()
+        },
+      }
+      anims.push(a)
+      return a as unknown as Animation
+    }
+    ShadowRoot.prototype.getAnimations = function (this: ShadowRoot) {
+      return anims.filter(
+        (a) => a.playState !== 'finished' && this.contains(a.el),
+      ) as unknown as Animation[]
+    }
+    // jsdom computes no transforms; the stylesheet's resting values:
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (el) =>
+        ({
+          transform: (el as HTMLElement).classList.contains('number')
+            ? 'matrix(1, 0, 0, 1, 0, 0)'
+            : 'none',
+          opacity: '1',
+        }) as CSSStyleDeclaration,
+    )
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 10,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 10,
+    })
+  })
+  afterEach(() => {
+    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    setEngineMode('auto')
+    delete (HTMLElement.prototype as Partial<HTMLElement>).animate
+    delete (ShadowRoot.prototype as Partial<ShadowRoot>).getAnimations
+  })
+
+  // flush() used to read computed styles and the spin height after the
+  // commits had written `is-spinning` and `--width`, forcing another style
+  // update, and getAnimations() right after it forced one more:
+  it('forces at most 1 layout per same-length update', () => {
+    const el = create()
+    el.data = formatToData(1234567.89, pct)
+    // The first animated update still reads in flush(): the engine only
+    // learns which channels to prepare() from it.
+    el.data = formatToData(9876543.21, pct)
+    anims.forEach((a) => a.finish())
+
+    const forced = forcedLayouts(el, () => {
+      el.data = formatToData(1234567.89, pct)
+    })
+    expect(forced).toBeLessThanOrEqual(1)
+  })
+
+  it('fires animationsfinish from the animations it started, without getAnimations()', async () => {
+    const el = create()
+    set(el, 3)
+    anims.forEach((a) => a.finish())
+    const getAnimations = vi.spyOn(ShadowRoot.prototype, 'getAnimations')
+    const finished = vi.fn()
+    el.addEventListener('animationsfinish', finished)
+
+    set(el, 7)
+    expect(getAnimations).not.toHaveBeenCalled()
+    const started = anims.filter((a) => a.playState === 'running')
+    expect(started.length).toBeGreaterThan(0)
+    await tick()
+    expect(finished).not.toHaveBeenCalled()
+
+    started.forEach((a) => a.finish())
+    await tick()
+    expect(finished).toHaveBeenCalledTimes(1)
   })
 })
