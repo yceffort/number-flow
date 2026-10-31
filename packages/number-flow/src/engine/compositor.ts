@@ -48,6 +48,9 @@ type Channel = {
   anims: Animation[]
   inputs: string
   legacy: Animation[]
+  // Taken by prepare() before the update's DOM writes, used up by flush():
+  authorStyled?: boolean
+  unit?: number
 }
 
 type Req = {
@@ -63,6 +66,39 @@ const channels = new WeakMap<HTMLElement, Partial<Record<Kind, Channel>>>()
 // Spins read --current and the numerals' inert state, which Digit can change
 // without starting a new spin (e.g. a plugin returning a 0 delta):
 const spins = new WeakMap<object, Set<Channel>>()
+// Every channel a scope has flushed, for prepare():
+const tracked = new WeakMap<object, Set<Channel>>()
+// Every animation a scope has started and not yet seen finish:
+const live = new WeakMap<object, Set<Animation>>()
+const setOf = <T>(map: WeakMap<object, Set<T>>, scope: object): Set<T> => {
+  let set = map.get(scope)
+  if (!set) map.set(scope, (set = new Set()))
+  return set
+}
+
+const start = (
+  scope: object,
+  el: HTMLElement,
+  keyframes: Keyframe[] | PropertyIndexedKeyframes,
+  timing: KeyframeAnimationOptions,
+) => {
+  const a = el.animate(keyframes, timing)
+  setOf(live, scope).add(a)
+  return a
+}
+
+/**
+ * The scope's animations still in flight: what `shadowRoot.getAnimations()`
+ * would list, minus the style update that call forces.
+ */
+export const animationsOf = (scope: object): Animation[] => {
+  const set = live.get(scope)
+  if (!set) return []
+  set.forEach((a) => {
+    if (!inFlight(a)) set.delete(a)
+  })
+  return Array.from(set)
+}
 
 const channel = (el: HTMLElement, kind: Kind): Channel => {
   let byKind = channels.get(el)
@@ -176,7 +212,7 @@ const opacityBase = (el: HTMLElement) =>
 // Author styles on ::part()s can override the stylesheet's transform/opacity,
 // in which case the accumulate path behaves differently (it builds on top of
 // the override, or has no effect at all). Keep that path for such targets:
-const overridden = (ch: Channel): boolean => {
+const authorStyled = (ch: Channel): boolean => {
   const {el, kind} = ch
   if (kind === 'tx') return getComputedStyle(el).transform !== 'none'
   if (kind === 'opacity')
@@ -190,12 +226,36 @@ const overridden = (ch: Channel): boolean => {
     const inner = el.firstElementChild as HTMLElement | null
     return (
       !inner ||
-      !(parseFloat(el.style.getPropertyValue('--width')) > 0) ||
       !IDENTITY.test(getComputedStyle(el).transform) ||
       !IDENTITY.test(getComputedStyle(inner).transform)
     )
   }
   return false
+}
+// `--width` is written by the same update that queues the request, so it is
+// checked here, at flush time:
+const overridden = (ch: Channel): boolean =>
+  (ch.kind === 'number' &&
+    !(parseFloat(ch.el.style.getPropertyValue('--width')) > 0)) ||
+  (ch.authorStyled ?? authorStyled(ch))
+
+/**
+ * Reads what flush() needs from layout and computed style. Call it before the
+ * update writes to the DOM: none of those writes change these values
+ * (`is-spinning` only shows the inert numerals, which are absolutely
+ * positioned), and reading them after the writes would force a style update.
+ */
+export const prepare = (scope: object) => {
+  const set = tracked.get(scope)
+  set?.forEach((ch) => {
+    if (!ch.el.isConnected) {
+      set.delete(ch)
+      return
+    }
+    if (ch.kind === 'spin') ch.unit = ch.el.offsetHeight || 100
+    // flush() only asks for a channel at rest:
+    if (localTime(ch) == null) ch.authorStyled = authorStyled(ch)
+  })
 }
 
 // Everything besides the deltas that the stylesheet reads:
@@ -240,15 +300,18 @@ export const flush = (scope: object) => {
   spins.get(scope)?.forEach((ch) => {
     if (!groups.has(ch)) groups.set(ch, [])
   })
+  const channelsOf = setOf(tracked, scope)
+  groups.forEach((_, ch) => channelsOf.add(ch))
 
-  // Read everything first, so the checks cost one style update at most:
+  // Read everything first, so the checks cost one style update at most (none
+  // when prepare() ran before the update's writes):
   const plans: Plan[] = []
   const demote: {ch: Channel; contribs: Contribution[]}[] = []
   const plan = (ch: Channel, contribs: Contribution[]) =>
     plans.push({
       ch,
       contribs,
-      unit: ch.kind === 'spin' ? ch.el.offsetHeight || 100 : 1,
+      unit: ch.kind === 'spin' ? (ch.unit ?? (ch.el.offsetHeight || 100)) : 1,
     })
   groups.forEach((rs, ch) => {
     ch.legacy = ch.legacy.filter(inFlight)
@@ -282,7 +345,7 @@ export const flush = (scope: object) => {
     ch.anims = []
     ch.contribs = []
     contribs.forEach((c) => {
-      const a = ch.el.animate(original(ch.kind, c.from), {
+      const a = start(scope, ch.el, original(ch.kind, c.from), {
         duration: c.duration,
         delay: c.delay,
         endDelay: c.endDelay,
@@ -294,8 +357,15 @@ export const flush = (scope: object) => {
     })
   })
   legacy.forEach((r) => {
-    const a = r.el.animate(r.keyframes, {...r.timing, composite: 'accumulate'})
-    if (r.kind) channel(r.el, r.kind).legacy.push(a)
+    const a = start(scope, r.el, r.keyframes, {
+      ...r.timing,
+      composite: 'accumulate',
+    })
+    if (r.kind) {
+      const ch = channel(r.el, r.kind)
+      ch.legacy.push(a)
+      channelsOf.add(ch)
+    }
   })
 
   const memo = new Map<string, Grid>()
@@ -306,15 +376,17 @@ export const flush = (scope: object) => {
     ch.contribs = contribs
     ch.inputs = readInputs(ch)
     ch.anims = bake(ch, contribs, unit, memo).map(({el, keyframes, timing}) => {
-      const a = el.animate(keyframes, timing)
+      const a = start(scope, el, keyframes, timing)
       if (typeof now === 'number') a.startTime = now
       return a
     })
-    if (ch.kind === 'spin') {
-      let set = spins.get(scope)
-      if (!set) spins.set(scope, (set = new Set()))
-      set.add(ch)
-    }
+    if (ch.kind === 'spin') setOf(spins, scope).add(ch)
+  })
+
+  // What prepare() took is good for this update only:
+  channelsOf.forEach((ch) => {
+    ch.authorStyled = undefined
+    ch.unit = undefined
   })
 }
 

@@ -11,7 +11,7 @@ import {digitYPercent, queue} from './compositor'
 import {parseEasing, type EasingFn} from './easing'
 
 export {digitYPercent}
-export {flush, discard} from './compositor'
+export {animationsOf, discard, flush, prepare} from './compositor'
 
 /**
  * Whether the browser can run the original, fully-native animation path
