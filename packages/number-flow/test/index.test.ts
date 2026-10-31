@@ -16,7 +16,7 @@ describe('NumberFlow.update', () => {
 
   beforeEach(() => {
     constructed = 0
-    vi.spyOn(Intl, 'NumberFormat').mockImplementation((...args) => {
+    vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (...args) {
       constructed++
       return new NativeNumberFormat(...args)
     })
