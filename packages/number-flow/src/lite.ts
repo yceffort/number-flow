@@ -129,9 +129,9 @@ export default class NumberFlowLite
 
   readonly created: boolean = false
 
-  private _pre?: SymbolSection
+  private _pre?: Section
   private _num?: Num
-  private _post?: SymbolSection
+  private _post?: Section
 
   readonly computedTrend?: number
 
@@ -186,7 +186,7 @@ export default class NumberFlowLite
       style.textContent = styles
       this.shadowRoot!.appendChild(style)
 
-      this._pre = new SymbolSection(this, pre, {
+      this._pre = new Section(this, pre, {
         justify: 'right',
         part: 'left',
       })
@@ -195,7 +195,7 @@ export default class NumberFlowLite
       this._num = new Num(this, integer, fraction)
       this.shadowRoot!.appendChild(this._num.el)
 
-      this._post = new SymbolSection(this, post, {
+      this._post = new Section(this, post, {
         justify: 'left',
         part: 'right',
       })
@@ -223,9 +223,18 @@ export default class NumberFlowLite
 
       if (!this.batched) this.willUpdate()
 
+      // Each phase finishes its DOM writes across every section before the
+      // next one reads layout, so an update forces one layout (one more when
+      // it adds chars, one more when it drops digits) instead of one per
+      // section plus one per digit (yceffort/number-flow#17):
       this._pre!.update(pre)
       this._num!.update({integer, fraction})
       this._post!.update(post)
+      const sections = [this._pre!, this._num!, this._post!]
+      sections.forEach((s) => s.measureAdded())
+      sections.forEach((s) => s.updateValues())
+      this._num!.measureRemoved()
+      this._num!.popRemoved()
 
       if (!this.batched) this.didUpdate()
     }
@@ -253,16 +262,17 @@ export default class NumberFlowLite
     // Skip the measurement pass when animations can't run: it reads layout
     // (a forced reflow) for every section and digit, and didUpdate — its only
     // consumer — would discard the measurements anyway
-    // (barvian/number-flow#195). Only cheap checks here; `visible(this)`
-    // itself reads layout so it stays in `set data`. didUpdate also checks
-    // `_preUpdated`, so a prop that changes between the two passes degrades
-    // to skipping that animation rather than animating from missing
-    // measurements:
+    // (barvian/number-flow#195). `visible(this)` reads layout itself, so it
+    // comes last: a flow that can't animate anyway never touches layout here.
+    // didUpdate also checks `_preUpdated`, so a prop that changes between the
+    // two passes degrades to skipping that animation rather than animating
+    // from missing measurements:
     this._preUpdated =
       canAnimate &&
       this._animated &&
       (!this.respectMotionPreference || !prefersReducedMotion?.matches) &&
-      this.ownerDocument.visibilityState === 'visible'
+      this.ownerDocument.visibilityState === 'visible' &&
+      visible(this)
     if (!this._preUpdated) return
 
     this._pre!.willUpdate()
@@ -294,9 +304,10 @@ export default class NumberFlowLite
     // Otherwise, dispatch a start event:
     else this.dispatchEvent(new Event('animationsstart'))
 
-    this._pre!.didUpdate()
-    this._num!.didUpdate()
-    this._post!.didUpdate()
+    // Measure every section and char before any of them writes to the DOM:
+    const sections = [this._pre!, this._num!, this._post!]
+    const commits = sections.map((s) => s.measure())
+    commits.forEach((commit) => commit())
     if (usesNativeEngine()) flush(this)
 
     const controller = new AbortController()
@@ -377,12 +388,29 @@ class Num {
     this._fraction.update(fraction)
   }
 
-  didUpdate() {
-    const rect = this.el.getBoundingClientRect()
+  measureAdded() {
+    this._integer.measureAdded()
+    this._fraction.measureAdded()
+  }
 
-    // Do this before starting to animate:
-    this._integer.didUpdate()
-    this._fraction.didUpdate()
+  updateValues() {
+    this._integer.updateValues()
+    this._fraction.updateValues()
+  }
+
+  measureRemoved() {
+    this._integer.measureRemoved()
+    this._fraction.measureRemoved()
+  }
+
+  popRemoved() {
+    this._integer.popRemoved()
+    this._fraction.popRemoved()
+  }
+
+  measure(): Commit {
+    const rect = this.el.getBoundingClientRect()
+    const commits = [this._integer.measure(), this._fraction.measure()]
 
     const dx = this._prevLeft! - rect.left
 
@@ -390,17 +418,21 @@ class Num {
     // We convert scale to width delta in px to better handle interruptions and keep them in
     // sync with translations:
     const dWidth = this._prevWidth! - width
-    this.el.style.setProperty('--width', String(width))
 
-    animate(
-      this.flow,
-      this.el,
-      {
-        [dxVar]: [`${dx}px`, '0px'],
-        [widthDeltaVar]: [dWidth, 0],
-      },
-      this.flow.transformTiming,
-    )
+    return () => {
+      commits.forEach((commit) => commit())
+      this.el.style.setProperty('--width', String(width))
+
+      animate(
+        this.flow,
+        this.el,
+        {
+          [dxVar]: [`${dx}px`, '0px'],
+          [widthDeltaVar]: [dWidth, 0],
+        },
+        this.flow.transformTiming,
+      )
+    }
   }
 }
 
@@ -408,9 +440,13 @@ class Num {
 // scanning `parts` once per existing child:
 const keySet = (parts: KeyedNumberPart[]) => new Set(parts.map((p) => p.key))
 
+// The DOM writes a measure() pass deferred until every read is done:
+type Commit = () => void
+const noop: Commit = () => {}
+
 type SectionProps = {justify: Justify} & HTMLProps<'span'>
 
-abstract class Section {
+class Section {
   readonly el: HTMLSpanElement
   readonly justify: Justify
 
@@ -472,66 +508,58 @@ abstract class Section {
       this.children.delete(key)
     }
 
-  protected unpop(char: Char) {
-    char.el.removeAttribute('inert')
-    char.el.style.top = ''
-    char.el.style[this.justify] = ''
-  }
+  // The chars update() added or kept, with the values updateValues() gives them:
+  private _added = new Map<Char, KeyedNumberPart['value']>()
+  private _updated = new Map<Char, KeyedNumberPart['value']>()
 
-  protected pop(chars: Map<any, Char>) {
-    // Calculate offsets for removed before popping, to avoid layout thrashing:
-    chars.forEach((char) => {
-      char.el.style.top = `${char.el.offsetTop}px`
-      char.el.style[this.justify] = `${offset(char.el, this.justify)}px`
+  // Writes only: takes the chars that are gone out of the flow and puts the
+  // rest in place.
+  update(parts: KeyedNumberPart[]) {
+    const keys = keySet(parts)
+    this.children.forEach((comp, key) => {
+      if (!keys.has(key)) this.remove(comp)
     })
-    chars.forEach((char) => {
-      char.el.setAttribute('inert', '')
-      char.present = false
-    })
-  }
 
-  protected addNewAndUpdateExisting(parts: KeyedNumberPart[]) {
-    const added = new Map<KeyedNumberPart, Char>()
-    const updated = new Map<KeyedNumberPart, Char>()
-
-    // Add new parts before any other updates, so we can save their position correctly:
     const reverse = this.justify === 'left'
     const op = reverse ? 'prepend' : 'append'
     forEach(
       parts,
       (part) => {
         let comp: Char
-        // Already exists/needs update, so set aside for now
         if (this.children.has(part.key)) {
           comp = this.children.get(part.key)!
-          updated.set(part, comp)
-          this.unpop(comp)
+          this._updated.set(comp, part.value)
+          comp.unpop()
           comp.present = true
         } else {
-          // New part
           comp = this.addChar(part, {startDigitsAtZero: true, animateIn: true})
-          added.set(part, comp)
+          this._added.set(comp, part.value)
         }
         this.el[op](comp.el)
       },
       {reverse},
     )
+  }
 
-    if (this.flow.computedAnimated) {
-      const rect = this.el.getBoundingClientRect() // this should only cause a layout if there were added children (?)
-      added.forEach((comp) => {
-        comp.willUpdate(rect)
-      })
-    }
-    // Update added children to their initial value (we start them at 0)
-    added.forEach((comp, part) => {
-      comp.update(part.value)
-    })
+  // A symbol fades out where it was, under whatever replaces it:
+  protected remove(comp: Char) {
+    if (comp.present) comp.pop()
+  }
 
-    // Update any updated children
-    updated.forEach((comp, part) => {
-      comp.update(part.value)
-    })
+  // Reads only: where the added chars start, before updateValues() moves
+  // everything.
+  measureAdded() {
+    if (!this._added.size || !this.flow.computedAnimated) return
+    const rect = this.el.getBoundingClientRect()
+    this._added.forEach((_, comp) => comp.willUpdate(rect))
+  }
+
+  // Writes only.
+  updateValues() {
+    this._added.forEach((value, comp) => comp.update(value))
+    this._updated.forEach((value, comp) => comp.update(value))
+    this._added.clear()
+    this._updated.clear()
   }
 
   private _prevOffset?: number
@@ -543,71 +571,61 @@ abstract class Section {
     this.children.forEach((comp) => comp.willUpdate(rect))
   }
 
-  didUpdate() {
+  measure(): Commit {
     const rect = this.el.getBoundingClientRect()
+    const commits = Array.from(this.children.values(), (comp) =>
+      comp.measure(rect),
+    )
+    const dx = this._prevOffset! - rect[this.justify]
 
-    // Make sure to pass this in before starting to animate:
-    this.children.forEach((comp) => comp.didUpdate(rect))
+    return () => {
+      commits.forEach((commit) => commit())
 
-    const offset = rect[this.justify]
-    const dx = this._prevOffset! - offset
-
-    // Technically checking for children could get weird during multiple interruptions
-    // but probably still worth it;
-    if (dx && this.children.size)
-      animate(
-        this.flow,
-        this.el,
-        {
-          transform: [`translateX(${dx}px)`, 'none'],
-        },
-        this.flow.transformTiming,
-      )
+      // Technically checking for children could get weird during multiple interruptions
+      // but probably still worth it;
+      if (dx && this.children.size)
+        animate(
+          this.flow,
+          this.el,
+          {
+            transform: [`translateX(${dx}px)`, 'none'],
+          },
+          this.flow.transformTiming,
+        )
+    }
   }
 }
 
+// A dropped digit fades out where it would sit once the kept digits have their
+// new values, so that it travels with neighbours whose width changes: the
+// dropped chars go back into the flow until the values are in, then get
+// measured and popped again.
 class NumberSection extends Section {
-  update(parts: KeyedNumberPart[]) {
-    const keys = keySet(parts)
-    const removed = new Map<NumberPartKey, Char>()
+  private _removed: Char[] = []
 
-    this.children.forEach((comp, key) => {
-      // Keep track of removed children:
-      if (!keys.has(key)) {
-        removed.set(key, comp)
-      }
-      // Put everything back into the flow briefly, to recompute offsets:
-      this.unpop(comp)
-    })
+  protected override remove(comp: Char) {
+    comp.unpop()
+    this._removed.push(comp)
+  }
 
-    this.addNewAndUpdateExisting(parts)
-
-    // Set all removed digits to 0, for mathematical correctness:
-    removed.forEach((comp) => {
+  override updateValues() {
+    super.updateValues()
+    // Set dropped digits to 0, for mathematical correctness:
+    this._removed.forEach((comp) => {
       if (comp instanceof Digit) comp.update(0)
     })
-
-    // Then end with them popped out again:
-    this.pop(removed)
   }
-}
 
-class SymbolSection extends Section {
-  update(parts: KeyedNumberPart[]) {
-    const keys = keySet(parts)
-    const removed = new Map<NumberPartKey, Char>()
+  // Reads only.
+  measureRemoved() {
+    if (!this.flow.computedAnimated) return
+    this._removed.forEach((comp) => comp.measureLayout())
+  }
 
-    this.children.forEach((comp, key) => {
-      // Keep track of removed children:
-      if (!keys.has(key)) {
-        removed.set(key, comp)
-      }
-    })
-
-    // Pop them, before any additions
-    this.pop(removed)
-
-    this.addNewAndUpdateExisting(parts)
+  // Writes only.
+  popRemoved() {
+    this._removed.forEach((comp) => comp.pop())
+    this._removed = []
   }
 }
 
@@ -696,9 +714,36 @@ abstract class Char<
     super(section.flow, el, props)
   }
 
+  // Layout position (transforms excluded, unlike the rects the subclasses
+  // measure), to pin the char there when it gets popped out of the flow:
+  private _top?: number
+  private _offset?: number
+
+  measureLayout() {
+    this._top = this.el.offsetTop
+    this._offset = offset(this.el, this.section.justify)
+  }
+
   abstract willUpdate(parentRect: DOMRect): void
   abstract update(value: P['value']): void
-  abstract didUpdate(parentRect: DOMRect): void
+  abstract measure(parentRect: DOMRect): Commit
+
+  pop() {
+    // Unset when nothing measured it, i.e. the update doesn't animate and
+    // `present` removes the char right away:
+    if (this._top != null) {
+      this.el.style.top = `${this._top}px`
+      this.el.style[this.section.justify] = `${this._offset}px`
+    }
+    this.el.setAttribute('inert', '')
+    this.present = false
+  }
+
+  unpop() {
+    this.el.removeAttribute('inert')
+    this.el.style.top = ''
+    this.el.style[this.section.justify] = ''
+  }
 }
 
 export class Digit extends Char<KeyedDigitPart> {
@@ -768,7 +813,7 @@ export class Digit extends Char<KeyedDigitPart> {
     this.value = value
   }
 
-  didUpdate(parentRect: DOMRect) {
+  measure(parentRect: DOMRect): Commit {
     const rect = this.el.getBoundingClientRect()
     const offset = rect[this.section.justify] - parentRect[this.section.justify]
     const halfWidth = rect.width / 2
@@ -776,32 +821,34 @@ export class Digit extends Char<KeyedDigitPart> {
       this.section.justify === 'left' ? offset + halfWidth : offset - halfWidth
     const dx = this._prevCenter! - center
 
-    if (dx)
+    return () => {
+      if (dx)
+        animate(
+          this.flow,
+          this.el,
+          {
+            transform: [`translateX(${dx}px)`, 'none'],
+          },
+          this.flow.transformTiming,
+        )
+
+      const delta = this.getDelta()
+      if (!delta) return
+
+      this.el.classList.add('is-spinning')
       animate(
         this.flow,
         this.el,
         {
-          transform: [`translateX(${dx}px)`, 'none'],
+          [deltaVar]: [-delta, 0],
         },
-        this.flow.transformTiming,
+        this.flow.spinTiming ?? this.flow.transformTiming,
       )
-
-    const delta = this.getDelta()
-    if (!delta) return
-
-    this.el.classList.add('is-spinning')
-    animate(
-      this.flow,
-      this.el,
-      {
-        [deltaVar]: [-delta, 0],
-      },
-      this.flow.spinTiming ?? this.flow.transformTiming,
-    )
-    // Hoisting the callback out prevents duplicates:
-    this.flow.addEventListener('animationsfinish', this._onAnimationsFinish, {
-      once: true,
-    })
+      // Hoisting the callback out prevents duplicates:
+      this.flow.addEventListener('animationsfinish', this._onAnimationsFinish, {
+        once: true,
+      })
+    }
   }
 
   getDelta() {
@@ -869,6 +916,9 @@ class Sym extends Char<KeyedSymbolPart> {
   private _prevOffset?: number
 
   willUpdate(parentRect: DOMRect) {
+    // A symbol section pins a dropped symbol where it was (Section.remove),
+    // so take that before anything moves:
+    this.measureLayout()
     if (this.type === 'decimal') return // decimal never needs animation b/c it's the first in a left aligned section and never moves
 
     const rect = this.el.getBoundingClientRect()
@@ -911,21 +961,23 @@ class Sym extends Char<KeyedSymbolPart> {
     this.value = value
   }
 
-  didUpdate(parentRect: DOMRect) {
-    if (this.type === 'decimal') return
+  measure(parentRect: DOMRect): Commit {
+    if (this.type === 'decimal') return noop
 
     const rect = this.el.getBoundingClientRect()
     const offset = rect[this.section.justify] - parentRect[this.section.justify]
     const dx = this._prevOffset! - offset
 
-    if (dx)
-      animate(
-        this.flow,
-        this.el,
-        {
-          transform: [`translateX(${dx}px)`, 'none'],
-        },
-        this.flow.transformTiming,
-      )
+    return () => {
+      if (dx)
+        animate(
+          this.flow,
+          this.el,
+          {
+            transform: [`translateX(${dx}px)`, 'none'],
+          },
+          this.flow.transformTiming,
+        )
+    }
   }
 }
