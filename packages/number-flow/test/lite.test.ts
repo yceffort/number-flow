@@ -33,6 +33,78 @@ const symbols = (el: TestFlow) =>
 const yOf = (digit: HTMLElement, n: number) =>
   (digit.children[n] as HTMLElement).style.getPropertyValue('--y')
 
+type LayoutGetter = (el: HTMLElement, original: () => unknown) => unknown
+
+// Popped chars are absolutely positioned, i.e. out of the flow:
+const inFlow = (c: Element) => !c.hasAttribute('inert')
+
+// Replaces HTMLElement layout getters (offsetWidth etc.) while fn() runs:
+const withLayout = (getters: Record<string, LayoutGetter>, fn: () => void) => {
+  const saved = Object.entries(getters).map(([prop, get]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      prop,
+    )!
+    Object.defineProperty(HTMLElement.prototype, prop, {
+      configurable: true,
+      get() {
+        return get(this, () => descriptor.get!.call(this))
+      },
+    })
+    return [prop, descriptor] as const
+  })
+  try {
+    fn()
+  } finally {
+    saved.forEach(([prop, descriptor]) =>
+      Object.defineProperty(HTMLElement.prototype, prop, descriptor),
+    )
+  }
+}
+
+// Counts the layouts a browser would be forced to run during fn(): every
+// layout read that follows a DOM write since the previous read. jsdom does no
+// layout, so the writes are observed through MutationObserver's synchronous
+// takeRecords() instead (yceffort/number-flow#17):
+const forcedLayouts = (el: TestFlow, fn: () => void) => {
+  const observer = new MutationObserver(() => {})
+  observer.observe(el, {attributes: true})
+  observer.observe(el.shadowRoot!, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+  })
+  let forced = 0
+  const read = () => {
+    if (observer.takeRecords().length) forced++
+  }
+
+  const rect = Element.prototype.getBoundingClientRect
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: Element) {
+      read()
+      return rect.call(this)
+    },
+  )
+  const counting: LayoutGetter = (_el, original) => {
+    read()
+    return original()
+  }
+
+  observer.takeRecords() // writes before fn() aren't its fault
+  withLayout(
+    {
+      offsetWidth: counting,
+      offsetHeight: counting,
+      offsetTop: counting,
+      offsetLeft: counting,
+    },
+    fn,
+  )
+  observer.disconnect()
+  return forced
+}
+
 describe('NumberFlowLite (rAF engine)', () => {
   let now = 0
   let frames: FrameRequestCallback[] = []
@@ -200,5 +272,93 @@ describe('NumberFlowLite (rAF engine)', () => {
     const willUpdate = vi.spyOn(el, 'willUpdate')
     el.data = data
     expect(willUpdate).not.toHaveBeenCalled()
+  })
+
+  // Regression for yceffort/number-flow#17: reads and writes used to
+  // interleave per section and per digit, forcing a layout for each.
+  const pct = new Intl.NumberFormat('en-US', {
+    style: 'percent',
+    signDisplay: 'always',
+    maximumFractionDigits: 0,
+  })
+  it.each([
+    {
+      name: 'same length', // +123,456,789% -> +987,654,321%
+      from: formatToData(1234567.89, pct),
+      to: formatToData(9876543.21, pct),
+      max: 1,
+    },
+    {
+      name: 'grows', // one more, to measure where the added chars start
+      from: formatToData(0.05, pct),
+      to: formatToData(1234567.89, pct),
+      max: 2,
+    },
+    {
+      name: 'shrinks', // one more, to measure where the dropped digits settle
+      from: formatToData(1234567.89, pct),
+      to: formatToData(0.05, pct),
+      max: 2,
+    },
+    {
+      name: 'drops symbols', // they stay where they were: nothing to measure
+      from: formatToData(0.05, pct), // +5%
+      to: formatToData(5, fmt),
+      max: 1,
+    },
+  ])(
+    'forces at most $max layouts per update ($name)',
+    async ({from, to, max}) => {
+      const el = create()
+      el.data = from
+      await settle()
+
+      const forced = forcedLayouts(el, () => {
+        el.data = to
+      })
+      expect(forced).toBeLessThanOrEqual(max)
+    },
+  )
+
+  // Dropped digits fade out pinned where they'd sit once the kept digits have
+  // their new values, so in a proportional font they travel with neighbours
+  // whose width changes instead of being overlapped by them:
+  it('pins dropped digits where they sit in the updated layout', async () => {
+    const el = create()
+    set(el, 1111)
+    await settle()
+
+    // Fake a proportional layout: a "1" is 10px wide, any other char 20px,
+    // and a section's in-flow chars sit left to right from 0:
+    const widthOf = (c: HTMLElement): number =>
+      c.classList.contains('section')
+        ? Array.from(c.children)
+            .filter(inFlow)
+            .reduce((w, s) => w + widthOf(s as HTMLElement), 0)
+        : c.style.getPropertyValue('--current') === '1'
+          ? 10
+          : 20
+    const leftOf = (c: HTMLElement) => {
+      let left = 0
+      for (let s = c.previousElementSibling; s; s = s.previousElementSibling)
+        if (inFlow(s)) left += widthOf(s as HTMLElement)
+      return left
+    }
+    withLayout(
+      {
+        offsetWidth: widthOf,
+        offsetLeft: leftOf,
+        offsetParent: (c) => c.parentElement,
+      },
+      () => set(el, 222),
+    )
+
+    // 1,111 -> 222 drops the "1" and the ",", and the kept digits widen from
+    // 10px to 20px each. Measured in the updated layout (with the dropped "1"
+    // already spun to 0) the section is 20 + 20 + 3 * 20 = 100px wide:
+    const [one] = digits(el)
+    const [comma] = symbols(el)
+    expect(one!.style.right).toBe('80px') // 100 - 20 - 0
+    expect(comma!.style.right).toBe('60px') // 100 - 20 - 20
   })
 })
