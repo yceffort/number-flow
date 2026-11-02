@@ -82,4 +82,17 @@ describe('NumberFlowGroup membership', () => {
       expect(flowsOf(other).size).toBe(1)
     },
   )
+
+  // The old group may go away before its observer saw the move; its release
+  // on disconnect must not take the batching back either:
+  it('keeps a flow handed over when it is disconnected right after', () => {
+    const {group, flow, node} = mount(true)
+    const other = document.createElement('number-flow-group')
+    document.body.appendChild(other)
+    other.appendChild(node)
+    group.remove()
+    expect(flow.batched).toBe(true)
+    expect(flowsOf(group).size).toBe(0)
+    expect(flowsOf(other).size).toBe(1)
+  })
 })
