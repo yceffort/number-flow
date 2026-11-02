@@ -9,6 +9,14 @@ const microtask =
     ? queueMicrotask
     : (cb: () => void) => void Promise.resolve().then(cb)
 
+// A removed node is the flow itself or a wrapper around some:
+const flowsIn = (node: Node): NumberFlow[] =>
+  node instanceof NumberFlow
+    ? [node]
+    : node instanceof Element
+      ? Array.from(node.querySelectorAll<NumberFlow>('number-flow'))
+      : []
+
 export default class NumberFlowGroup extends ServerSafeHTMLElement {
   private _mutationObserver?: MutationObserver
 
@@ -26,9 +34,11 @@ export default class NumberFlowGroup extends ServerSafeHTMLElement {
     this._mutationObserver ??= new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.removedNodes.forEach((node) => {
-          if (node instanceof NumberFlow) {
-            this._removeDescendant(node)
-          }
+          // Flows can leave inside a wrapper (yceffort/number-flow#26), and
+          // one moved within the group was re-inserted before this ran:
+          flowsIn(node).forEach((flow) => {
+            if (!this.contains(flow)) this._removeDescendant(flow)
+          })
         })
       })
     })
@@ -70,6 +80,8 @@ export default class NumberFlowGroup extends ServerSafeHTMLElement {
     this.removeEventListener(CONNECT_EVENT, this._onDescendantConnected)
     this.removeEventListener(UPDATE_EVENT, this._onDescendantUpdate)
     this._mutationObserver?.disconnect()
+    // connectedCallback collects them again if the group comes back:
+    this._flows.forEach(this._removeDescendant)
   }
 }
 
