@@ -1,11 +1,12 @@
 'use client'
-import NumberFlow from '@yceffort/number-flow-react'
+import NumberFlow, {useCanAnimate} from '@yceffort/number-flow-react'
 import {useState} from 'react'
 
 export default function Page() {
   const [value, setValue] = useState(12345.6)
+  const canAnimate = useCanAnimate()
   return (
-    <main>
+    <main data-can-animate={canAnimate}>
       <h1>SSR smoke</h1>
       <NumberFlow
         value={value}
