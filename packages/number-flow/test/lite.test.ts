@@ -3,6 +3,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {setEngineMode} from '../src/engine'
 import {formatToData} from '../src/formatter'
 import NumberFlowLite, {canAnimate} from '../src/lite'
+import {opacityDeltaVar} from '../src/styles'
 
 // jsdom's ElementInternals only half-implements ARIAMixin, so take the
 // attribute fallback — which is also the path old browsers use:
@@ -58,6 +59,15 @@ type LayoutGetter = (el: HTMLElement, original: () => unknown) => unknown
 
 // Popped chars are absolutely positioned, i.e. out of the flow:
 const inFlow = (c: Element) => !c.hasAttribute('inert')
+// Whether every in-flow char is at full opacity: the stylesheet renders
+// calc(1 + var(base)), and an exit leaves the base at -.999 (jsdom computes
+// no calc(), so read the base):
+const opaque = (el: TestFlow) =>
+  Array.from(
+    el.shadowRoot!.querySelectorAll<HTMLElement>(
+      '.animate-presence:not([inert])',
+    ),
+  ).every((c) => !(parseFloat(c.style.getPropertyValue(opacityDeltaVar)) || 0))
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -408,11 +418,14 @@ describe('NumberFlowLite (rAF engine)', () => {
       set(el, value) // reclaims the same chars, without animating
       const expected = fmt.format(value)
       expect(rendered(el)).toBe(expected)
+      // And not left at the exit's base opacity of .001:
+      expect(opaque(el)).toBe(true)
 
       await tick() // the stale animationsfinish fires
       expect(rendered(el)).toBe(expected)
       await settle() // and where the exit would have ended
       expect(rendered(el)).toBe(expected)
+      expect(opaque(el)).toBe(true)
     },
   )
 
@@ -446,6 +459,7 @@ describe('NumberFlowLite (rAF engine)', () => {
     expect(rendered(el)).toBe('1,000')
     await settle()
     expect(rendered(el)).toBe('1,000')
+    expect(opaque(el)).toBe(true)
   })
 })
 
@@ -570,5 +584,6 @@ describe('NumberFlowLite (native engine)', () => {
     await tick()
     expect(rendered(el)).toBe('1,000')
     expect(digits(el).filter(inFlow)).toHaveLength(4)
+    expect(opaque(el)).toBe(true)
   })
 })

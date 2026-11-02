@@ -289,6 +289,11 @@ async function run() {
   await wait(1000) // 원래 exit 이 끝났을 시점 이후에도 그대로여야 한다
   assertClean('scenario6 (restored without animation)')
   assert('scenario6 text', currentText() === '1,111.1', currentText())
+  // 되살아난 문자가 exit 가 남긴 opacity 기준값(-.999)에 묶여 있으면 안 된다:
+  const dim = Array.from(
+    root.querySelectorAll('.animate-presence:not([inert])'),
+  ).filter((el) => getComputedStyle(el).opacity !== '1').length
+  assert('scenario6 restored chars opaque', dim === 0, dim)
   flow.animated = true
 
   report()

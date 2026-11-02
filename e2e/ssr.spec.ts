@@ -94,4 +94,14 @@ test('keeps digits restored in the render that turns animation off', async ({
   // 원래 exit 이 끝났을 시점(900ms) 이후에도 그대로여야 한다:
   await page.waitForTimeout(1200)
   expect(await renderedText(page)).toBe('12,345.6원')
+  // 되살아난 문자가 exit 가 남긴 opacity 기준값(-.999)에 묶여 있으면 안 된다:
+  const dim = await page.evaluate(
+    () =>
+      Array.from(
+        document
+          .querySelector('number-flow-yceffort-react')!
+          .shadowRoot!.querySelectorAll('.animate-presence:not([inert])'),
+      ).filter((el) => getComputedStyle(el).opacity !== '1').length,
+  )
+  expect(dim).toBe(0)
 })
