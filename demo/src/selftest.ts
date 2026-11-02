@@ -277,6 +277,20 @@ async function run() {
     currentText(),
   )
 
+  // --- 시나리오 6: 나가는 중인 문자를 애니메이션 없이 되살리기 (#28) ---
+  // 자릿수가 줄어 문자가 빠져나가는 도중 animated=false 로 끄고 같은 태스크에서
+  // 원래 값으로 되돌리면, 이전 exit 의 animationsfinish 가 되살아난 문자를
+  // 지우면 안 된다:
+  flow.update(1.1)
+  flow.animated = false
+  flow.update(1111.1)
+  await wait(100)
+  assert('scenario6 restored text', currentText() === '1,111.1', currentText())
+  await wait(1000) // 원래 exit 이 끝났을 시점 이후에도 그대로여야 한다
+  assertClean('scenario6 (restored without animation)')
+  assert('scenario6 text', currentText() === '1,111.1', currentText())
+  flow.animated = true
+
   report()
 }
 

@@ -38,6 +38,21 @@ const symbols = (el: TestFlow) =>
   Array.from(el.shadowRoot!.querySelectorAll<HTMLElement>('.symbol'))
 const yOf = (digit: HTMLElement, n: number) =>
   (digit.children[n] as HTMLElement).style.getPropertyValue('--y')
+// The value as rendered: the in-flow chars (exiting ones are inert), each
+// showing its active numeral or symbol value:
+const rendered = (el: TestFlow) =>
+  Array.from(
+    el.shadowRoot!.querySelectorAll(
+      '.digit:not([inert]), .symbol:not([inert])',
+    ),
+    (c) =>
+      c.classList.contains('digit')
+        ? (c.querySelector('.digit__num:not([inert])')?.textContent ?? '')
+        : Array.from(
+            c.querySelectorAll('.symbol__value:not([inert])'),
+            (v) => v.textContent,
+          ).join(''),
+  ).join('')
 
 type LayoutGetter = (el: HTMLElement, original: () => unknown) => unknown
 
@@ -375,6 +390,63 @@ describe('NumberFlowLite (rAF engine)', () => {
     expect(one!.style.right).toBe('80px') // 100 - 20 - 0
     expect(comma!.style.right).toBe('60px') // 100 - 20 - 20
   })
+
+  // Regression (yceffort/number-flow#28): chars that had started exiting and
+  // were reclaimed by a non-animated update in the same task were still
+  // removed when the old exit's animationsfinish fired:
+  it.each([
+    ['digits and a group separator', 1000, 2],
+    ['the decimal point and a fraction digit', 1.5, 1],
+    ['a sign', -5, 5],
+  ])(
+    'keeps %s restored by a non-animated update before the old exit finishes',
+    async (_name, value, shrunk) => {
+      const el = create()
+      set(el, value)
+      set(el, shrunk) // the dropped chars start exiting
+      el.animated = false // finishes their tweens: animationsfinish is pending
+      set(el, value) // reclaims the same chars, without animating
+      const expected = fmt.format(value)
+      expect(rendered(el)).toBe(expected)
+
+      await tick() // the stale animationsfinish fires
+      expect(rendered(el)).toBe(expected)
+      await settle() // and where the exit would have ended
+      expect(rendered(el)).toBe(expected)
+    },
+  )
+
+  it('still removes exiting chars that a non-animated update keeps absent', async () => {
+    const el = create()
+    set(el, 1000)
+    set(el, 2)
+    el.animated = false
+    set(el, 3)
+    await tick()
+    expect(rendered(el)).toBe('3')
+    expect(digits(el)).toHaveLength(1)
+    expect(symbols(el)).toHaveLength(0)
+  })
+
+  // The React wrapper drives a batched flow in this order when `animated`
+  // and `value` change in one render:
+  it('keeps restored chars when a batched update turns animation off', async () => {
+    const el = create()
+    el.batched = true
+    set(el, 1000)
+    const update = (value: number, animated: boolean) => {
+      el.animated = animated
+      el.willUpdate()
+      set(el, value)
+      el.didUpdate()
+    }
+    update(2, true)
+    update(1000, false)
+    await tick()
+    expect(rendered(el)).toBe('1,000')
+    await settle()
+    expect(rendered(el)).toBe('1,000')
+  })
 })
 
 describe('NumberFlowLite (native engine)', () => {
@@ -486,5 +558,17 @@ describe('NumberFlowLite (native engine)', () => {
     started.forEach((a) => a.finish())
     await tick()
     expect(finished).toHaveBeenCalledTimes(1)
+  })
+
+  // yceffort/number-flow#28, on the native engine:
+  it('keeps chars restored by a non-animated update before the old exit finishes', async () => {
+    const el = create()
+    set(el, 1000)
+    set(el, 2)
+    el.animated = false
+    set(el, 1000)
+    await tick()
+    expect(rendered(el)).toBe('1,000')
+    expect(digits(el).filter(inFlow)).toHaveLength(4)
   })
 })
