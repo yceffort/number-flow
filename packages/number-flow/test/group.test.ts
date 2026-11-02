@@ -18,8 +18,8 @@ describe('NumberFlowGroup membership', () => {
 
   // A flow directly under the group, or inside a wrapper element:
   const mount = (wrapped: boolean) => {
-    const group = document.createElement('number-flow-group') as NumberFlowGroup
-    const flow = document.createElement('number-flow') as NumberFlow
+    const group = document.createElement('number-flow-group')
+    const flow = document.createElement('number-flow')
     const node = wrapped ? document.createElement('div') : flow
     if (wrapped) node.appendChild(flow)
     group.appendChild(node)
@@ -62,4 +62,24 @@ describe('NumberFlowGroup membership', () => {
     expect(flow.batched).toBe(false)
     expect(flowsOf(group).size).toBe(0)
   })
+
+  // The new group registers the flow when it connects there; the old group's
+  // observer runs after that and must not take the batching back:
+  it.each([
+    ['a flow', false],
+    ['a wrapper around a flow', true],
+  ])(
+    'hands the flow over when %s moves to another group',
+    async (_name, wrapped) => {
+      const {group, flow, node} = mount(wrapped)
+      const other = document.createElement('number-flow-group')
+      document.body.appendChild(other)
+      other.appendChild(node)
+      expect(flow.batched).toBe(true)
+      await tick()
+      expect(flow.batched).toBe(true)
+      expect(flowsOf(group).size).toBe(0)
+      expect(flowsOf(other).size).toBe(1)
+    },
+  )
 })

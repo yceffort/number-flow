@@ -37,7 +37,11 @@ export default class NumberFlowGroup extends ServerSafeHTMLElement {
           // Flows can leave inside a wrapper (yceffort/number-flow#26), and
           // one moved within the group was re-inserted before this ran:
           flowsIn(node).forEach((flow) => {
-            if (!this.contains(flow)) this._removeDescendant(flow)
+            if (this.contains(flow)) return
+            // One moved to another group was registered there on connect,
+            // before this ran: only its membership here ends.
+            if (flow.closest('number-flow-group')) this._flows.delete(flow)
+            else this._removeDescendant(flow)
           })
         })
       })
