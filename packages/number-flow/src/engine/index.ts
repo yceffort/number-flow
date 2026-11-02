@@ -163,7 +163,12 @@ const progressAt = (t: Timing, local: number): number | null => {
     (t.direction === 'alternate'
       ? odd
       : t.direction === 'alternate-reverse' && !odd)
-  return t.ease(reverse ? 1 - progress : progress)
+  // Step easings also read the before flag: the before phase going forwards,
+  // or the after phase going backwards.
+  return t.ease(
+    reverse ? 1 - progress : progress,
+    before ? !reverse : after && reverse,
+  )
 }
 
 class JSAnimation {

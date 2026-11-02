@@ -330,6 +330,34 @@ describe('rAF engine', () => {
       expect(tx(el)).toBe('translateX(5px)')
     })
 
+    // A step easing on an exact boundary sits on the step below while the
+    // before flag is set: in the before phase going forwards, and in the
+    // after phase going backwards (what a fill shows):
+    it('holds a step easing on the lower step through the delay', () => {
+      const {el} = start({
+        duration: 100,
+        delay: 100,
+        iterationStart: 0.5,
+        fill: 'backwards',
+        easing: 'steps(4, start)',
+      })
+      expect(tx(el)).toBe('translateX(5px)') // step 2 of 4, not 3
+      step(100) // active: the flag is off
+      expect(tx(el)).toBe('translateX(2.5px)')
+    })
+
+    it('keeps a reversed step easing on the lower step after the end', () => {
+      const {el} = start({
+        duration: 100,
+        direction: 'reverse',
+        iterationStart: 0.5,
+        fill: 'forwards',
+        easing: 'steps(4, start)',
+      })
+      step(100)
+      expect(tx(el)).toBe('translateX(5px)') // step 2 of 4, not 3
+    })
+
     it('keeps the end value with `fill: forwards` without ticking on', () => {
       const {scope, el} = start({
         duration: 100,
