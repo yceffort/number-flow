@@ -44,6 +44,7 @@ import NumberFlow from '@yceffort/number-flow-react'
   - 스프링 `linear()` easing은 90개 샘플 포인트를 보간해 **곡선까지 동일**하게 재생합니다. `cubic-bezier()`/키워드/`steps()`/사용자 지정 `linear()`도 파싱합니다.
   - `--_number-flow-dx`, `--scale-x` 등을 매 프레임 인라인 스타일로 기록해 원본 스타일시트가 그대로 소비합니다.
   - 자릿수 스핀은 CSS `mod()`/`round()` 수식을 JS로 포팅해 각 `.digit__num`의 `--y`를 직접 계산합니다.
+  - `EffectTiming`은 전부 반영합니다. `delay`, `endDelay`, `iterations`, `iterationStart`, `direction`, `fill`이 Web Animations 타이밍 모델을 따르므로, 효과가 도는 시간과 `animationsfinish`가 발생하는 시점이 네이티브 경로와 같습니다.
   - rAF가 스로틀되는 환경(백그라운드 WebView 등)을 위한 setTimeout 백스톱 티커가 있어, 퇴장 문자 정리가 끊기지 않습니다(원본의 [값 겹침 이슈 #148](https://github.com/barvian/number-flow/issues/148) 발생 경로 차단).
 
 ## 브라우저 지원
@@ -83,7 +84,6 @@ import NumberFlow from '@yceffort/number-flow-react'
 - 폴백 경로는 **메인 스레드**에서 돌므로, 메인 스레드가 심하게 바쁘면 프레임이 떨어질 수 있습니다. 네이티브 경로는 컴포지터에서 돌지만, 아래 두 경우와 [동작 방식](#동작-방식)에 적은 `::part()`, 타이밍 예외에서는 메인 스레드를 씁니다.
 - 네이티브 경로에서 진행 중인 애니메이션을 끊는 업데이트는 남은 애니메이션을 다시 구워 넣기 때문에, 그 순간의 메인 스레드 비용이 늘어납니다(300ms 간격 인터럽트 벤치, 1x, Apple M5 기준 업데이트 1회 약 5ms에서 약 15ms).
 - 비례폭 숫자에서는 대부분의 업데이트가 숫자 폭을 바꾸고, 그때 애니메이션의 일부 구간 동안 마스크 페이드가 메인 스레드에서 돕니다. `font-variant-numeric: tabular-nums`를 쓰면 이 비용이 없어집니다(이슈 벤치 1x 기준 메인 스레드 시간 59 대 14 ms/s).
-- 폴백에서 `EffectTiming`은 `duration`/`delay`/`easing`만 지원합니다 (`iterations` 등은 무시).
 - `mix-blend-mode: plus-lighter` 미지원 브라우저에서는 ± 기호 크로스페이드가 일반 페이드로 소폭 열화됩니다.
 - Vue/Svelte 래퍼는 아직 포팅하지 않았습니다 (코어는 동일하므로 필요 시 원본 래퍼를 참고해 추가 가능).
 

@@ -44,6 +44,7 @@ import NumberFlow from '@yceffort/number-flow-react'
   - The spring `linear()` easing is interpolated from its 90 sample points, so **even the curve is identical**. `cubic-bezier()`, keywords, `steps()`, and custom `linear()` strings are parsed too.
   - `--_number-flow-dx`, `--scale-x`, etc. are written as inline styles every frame, so the upstream stylesheet consumes them unchanged.
   - The digit spin ports the CSS `mod()`/`round()` math to JS and computes each `.digit__num`'s `--y` directly.
+  - `EffectTiming` is honored in full: `delay`, `endDelay`, `iterations`, `iterationStart`, `direction` and `fill` follow the Web Animations timing model, so an effect runs for the same time and `animationsfinish` fires at the same moment as on the native path.
   - A setTimeout backstop ticker keeps animations finishing when rAF is throttled (backgrounded WebViews, etc.), which closes the known paths to upstream's [overlapping-values issue #148](https://github.com/barvian/number-flow/issues/148).
 
 ## Browser support
@@ -83,7 +84,6 @@ Below the floor there is no graceful degradation — updates throw. Chrome 64–
 - The fallback path runs on the **main thread**, so frames can drop when the main thread is very busy. The native path runs on the compositor, except in the next two cases and for the `::part()` and timing exceptions in [How it works](#how-it-works).
 - On the native path, an update that interrupts running animations re-bakes what is left of them, so it costs more main-thread time up front (about 15ms per update instead of 5ms in the 300ms-interrupt benchmark, 1x, Apple M5).
 - With proportional digits most updates change the number's width, and the mask's fade then animates on the main thread for part of each animation. `font-variant-numeric: tabular-nums` avoids that (59 vs 14 ms/s of main-thread time in the issue benchmark at 1x).
-- In the fallback, `EffectTiming` supports only `duration`/`delay`/`easing` (`iterations` etc. are ignored).
 - On browsers without `mix-blend-mode: plus-lighter`, the ± sign crossfade degrades slightly to a plain fade.
 - Vue/Svelte wrappers are not ported yet (the core is identical, so they can be added following the upstream wrappers).
 
