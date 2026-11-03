@@ -94,48 +94,120 @@ class Channel {
 
   apply(now: number) {
     let total = 0
+    let running = false
     this.anims.forEach((anim) => {
-      total += anim.valueAt(now)
-      if (anim.done) this.anims.delete(anim)
+      const value = anim.valueAt(now)
+      total += value
+      if (!anim.done) running = true
+      // A forwards fill keeps contributing its end value once done:
+      else if (!value) this.anims.delete(anim)
     })
     this.applier(this.el, total, this.anims.size === 0)
-    if (this.anims.size === 0) activeChannels.delete(this)
+    if (!running) activeChannels.delete(this)
   }
+}
+
+// The WAAPI timing model, for an effect started at a known time on a
+// monotonic clock (https://drafts.csswg.org/web-animations-1/#the-effect-timing-model):
+type Timing = {
+  delay: number
+  endDelay: number
+  duration: number
+  iterations: number
+  iterationStart: number
+  direction: PlaybackDirection
+  fill: FillMode
+  ease: EasingFn
+}
+
+const normalize = (t: EffectTiming): Timing => ({
+  delay: t.delay ?? 0,
+  endDelay: t.endDelay ?? 0,
+  duration: typeof t.duration === 'number' ? t.duration : 0,
+  iterations: t.iterations ?? 1,
+  iterationStart: t.iterationStart ?? 0,
+  direction: t.direction ?? 'normal',
+  fill: t.fill ?? 'auto',
+  ease: parseEasing(typeof t.easing === 'string' ? t.easing : undefined),
+})
+
+const activeDuration = (t: Timing) =>
+  t.duration && t.iterations ? t.duration * t.iterations : 0
+// When the effect is over and `finished` resolves:
+const endTime = (t: Timing) =>
+  Math.max(t.delay + activeDuration(t) + t.endDelay, 0)
+
+// Transformed progress at a local time, or null while the effect is not in
+// effect (before or after its active phase, with no fill covering that):
+const progressAt = (t: Timing, local: number): number | null => {
+  const active = activeDuration(t)
+  const end = endTime(t)
+  const before = local < Math.max(Math.min(t.delay, end), 0)
+  const after = !before && local >= Math.max(Math.min(t.delay + active, end), 0)
+  const fills =
+    t.fill === 'both' || t.fill === (before ? 'backwards' : 'forwards')
+  if ((before || after) && !fills) return null
+
+  const activeTime = clamp(0, local - t.delay, active)
+  const overall =
+    (t.duration ? activeTime / t.duration : before ? 0 : t.iterations) +
+    t.iterationStart
+  let progress = (overall === Infinity ? t.iterationStart : overall) % 1
+  // The end of the last iteration is 1, not the 0 of the one after:
+  if (!progress && !before && activeTime === active && t.iterations)
+    progress = 1
+  const iteration = Math.floor(overall) - (progress === 1 ? 1 : 0)
+  const odd = isFinite(iteration) && iteration % 2 === 1
+  const reverse =
+    t.direction === 'reverse' ||
+    (t.direction === 'alternate'
+      ? odd
+      : t.direction === 'alternate-reverse' && !odd)
+  // Step easings also read the before flag: the before phase going forwards,
+  // or the after phase going backwards.
+  return t.ease(
+    reverse ? 1 - progress : progress,
+    before ? !reverse : after && reverse,
+  )
 }
 
 class JSAnimation {
   readonly finished: Promise<void>
   private _resolve!: () => void
   done = false
+  // What it contributes once done: non-zero only with a forwards fill
+  private _end = 0
 
   constructor(
     private _channel: Channel,
     private _scope: object,
     private _from: number,
     private _start: number,
-    private _duration: number,
-    private _ease: EasingFn,
+    private _timing: Timing,
   ) {
     this.finished = new Promise<void>((resolve) => {
       this._resolve = resolve
     })
   }
 
+  private _valueAt(local: number): number {
+    const progress = progressAt(this._timing, local)
+    return progress == null ? 0 : this._from * (1 - progress)
+  }
+
   valueAt(now: number): number {
-    if (this.done) return 0
-    const t = (now - this._start) / this._duration
-    // Like WAAPI with the default fill, a delayed animation contributes
-    // nothing until its active phase starts:
-    if (t < 0) return 0
-    if (t >= 1) {
+    if (this.done) return this._end
+    const local = now - this._start
+    if (local >= endTime(this._timing)) {
       this._finish()
-      return 0
+      return this._end
     }
-    return this._from * (1 - this._ease(t))
+    return this._valueAt(local)
   }
 
   private _finish() {
     this.done = true
+    this._end = this._valueAt(endTime(this._timing))
     scopeAnims.get(this._scope)?.delete(this)
     this._resolve()
   }
@@ -198,11 +270,7 @@ export const animate = (
     return
   }
 
-  const duration = typeof timing.duration === 'number' ? timing.duration : 0
-  const delay = timing.delay ?? 0
-  const ease = parseEasing(
-    typeof timing.easing === 'string' ? timing.easing : undefined,
-  )
+  const t = normalize(timing)
   const now = performance.now()
 
   let anims = scopeAnims.get(scope)
@@ -218,16 +286,9 @@ export const animate = (
     if (!channel) channels.set(prop, (channel = new Channel(el, applier)))
 
     const from = numberIn(keyframes[prop]![0])
-    const anim = new JSAnimation(
-      channel,
-      scope,
-      from,
-      now + delay,
-      duration,
-      ease,
-    )
+    const anim = new JSAnimation(channel, scope, from, now, t)
 
-    if (duration <= 0) {
+    if (endTime(t) <= 0) {
       // Nothing to tween; jump straight to the end state:
       channel.anims.add(anim)
       activeChannels.add(channel)
