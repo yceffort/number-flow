@@ -28,8 +28,14 @@ export const useIsSupported = () =>
 export const usePrefersReducedMotion = () =>
   React.useSyncExternalStore(
     (cb) => {
-      _prefersReducedMotion?.addEventListener('change', cb)
-      return () => _prefersReducedMotion?.removeEventListener('change', cb)
+      const mql = _prefersReducedMotion
+      // Safari < 14: MediaQueryList isn't an EventTarget, only addListener exists
+      if (mql && typeof mql.addEventListener !== 'function') {
+        mql.addListener(cb)
+        return () => mql.removeListener(cb)
+      }
+      mql?.addEventListener('change', cb)
+      return () => mql?.removeEventListener('change', cb)
     },
     () => _prefersReducedMotion?.matches ?? false,
     () => false,
