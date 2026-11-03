@@ -681,6 +681,9 @@ class AnimatePresence {
   }
 
   private _remove = () => {
+    // An exit's animationsfinish can arrive after the char was reclaimed
+    // (yceffort/number-flow#28):
+    if (this._present) return
     this.el.remove()
     this._onRemove?.()
   }
@@ -690,13 +693,17 @@ class AnimatePresence {
     this._present = val
     if (val) this.el.removeAttribute('inert')
     else this.el.setAttribute('inert', '')
+    // Reclaimed before the exit's animationsfinish fired: it must not remove
+    // the char, whether or not this update animates, and the base opacity the
+    // exit left at -.999 goes back to 1 either way (yceffort/number-flow#28):
+    if (val) this.flow.removeEventListener('animationsfinish', this._remove)
+    this.el.style.setProperty(opacityDeltaVar, val ? '0' : '-.999')
 
     if (!this.flow.computedAnimated) {
       if (!val) this._remove()
       return
     }
 
-    this.el.style.setProperty(opacityDeltaVar, val ? '0' : '-.999')
     animate(
       this.flow,
       this.el,
@@ -706,8 +713,7 @@ class AnimatePresence {
       this.flow.opacityTiming,
     )
 
-    if (val) this.flow.removeEventListener('animationsfinish', this._remove)
-    else
+    if (!val)
       this.flow.addEventListener('animationsfinish', this._remove, {
         once: true,
       })
