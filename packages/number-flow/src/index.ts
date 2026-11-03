@@ -45,7 +45,8 @@ export default class NumberFlow extends NumberFlowLite {
     this.connected = true
     this.dispatchEvent(new Event(CONNECT_EVENT, {bubbles: true}))
   }
-  disconnectedCallback() {
+  override disconnectedCallback() {
+    super.disconnectedCallback()
     this.connected = false
   }
 
