@@ -9,6 +9,8 @@ import {
 } from '../src/engine'
 import {dxVar, opacityDeltaVar, deltaVar, widthDeltaVar} from '../src/styles'
 
+const tx = (el: HTMLElement) => el.style.transform
+
 describe('digitYPercent (JS port of the CSS mod()/round() formula)', () => {
   it('keeps the current number at 0 and neighbors at ±100%', () => {
     expect(digitYPercent(5, 10, 5)).toBe(0)
@@ -59,6 +61,10 @@ describe('rAF engine', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => now)
   })
   afterEach(() => {
+    // Drain the loop: the engine takes a frame it requested as pending until
+    // it runs, so a test ending mid-flight would leave the next one waiting
+    // on a callback its reset has dropped:
+    while (frames.length) step(1000)
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     setEngineMode('auto')
@@ -246,5 +252,134 @@ describe('rAF engine', () => {
     expect(el.style.transform).toBe('')
     await expect(all).resolves.toBeDefined()
     expect(finishedOf(scope)).toHaveLength(0)
+  })
+
+  // yceffort/number-flow#25: the fallback read only duration, delay and
+  // easing, so the same timing object ran for a different time, in a
+  // different direction and resolved `finished` at a different moment than
+  // on the native path.
+  describe('EffectTiming', () => {
+    // A 10px translate, with its first frame at t=0:
+    const start = (timing: EffectTiming) => {
+      const scope = {}
+      const el = document.createElement('span')
+      animate(
+        scope,
+        el,
+        {transform: ['translateX(10px)', 'none']},
+        {easing: 'linear', ...timing},
+      )
+      step(0)
+      return {scope, el}
+    }
+
+    it('repeats for `iterations`', () => {
+      const {scope, el} = start({duration: 100, iterations: 2})
+      step(50)
+      expect(tx(el)).toBe('translateX(5px)')
+      step(50) // the second iteration starts over
+      expect(tx(el)).toBe('translateX(10px)')
+      expect(finishedOf(scope)).toHaveLength(1)
+      step(50)
+      expect(tx(el)).toBe('translateX(5px)')
+      step(50)
+      expect(tx(el)).toBe('')
+      expect(finishedOf(scope)).toHaveLength(0)
+    })
+
+    it('plays backwards with `direction: reverse`', () => {
+      const {el} = start({duration: 100, direction: 'reverse'})
+      expect(tx(el)).toBe('') // starts at the end value
+      step(25)
+      expect(tx(el)).toBe('translateX(2.5px)')
+      step(75)
+      expect(tx(el)).toBe('')
+    })
+
+    it('plays odd iterations backwards with `direction: alternate`', () => {
+      const {el} = start({duration: 100, iterations: 2, direction: 'alternate'})
+      step(125) // a quarter into the second iteration, reversed: 75%
+      expect(tx(el)).toBe('translateX(2.5px)')
+    })
+
+    it('starts partway through with `iterationStart`', () => {
+      const {scope, el} = start({duration: 100, iterationStart: 0.5})
+      expect(tx(el)).toBe('translateX(5px)')
+      step(50) // one whole iteration in: the next one starts over
+      expect(tx(el)).toBe('translateX(10px)')
+      step(50) // the active duration is still one iteration long
+      expect(tx(el)).toBe('')
+      expect(finishedOf(scope)).toHaveLength(0)
+    })
+
+    it('contributes nothing through the delay by default', () => {
+      const {el} = start({duration: 100, delay: 100})
+      expect(tx(el)).toBe('')
+      step(50)
+      expect(tx(el)).toBe('')
+      step(100)
+      expect(tx(el)).toBe('translateX(5px)')
+    })
+
+    it('holds the start value through the delay with `fill: backwards`', () => {
+      const {el} = start({duration: 100, delay: 100, fill: 'backwards'})
+      expect(tx(el)).toBe('translateX(10px)')
+      step(50)
+      expect(tx(el)).toBe('translateX(10px)')
+      step(100)
+      expect(tx(el)).toBe('translateX(5px)')
+    })
+
+    // A step easing on an exact boundary sits on the step below while the
+    // before flag is set: in the before phase going forwards, and in the
+    // after phase going backwards (what a fill shows):
+    it('holds a step easing on the lower step through the delay', () => {
+      const {el} = start({
+        duration: 100,
+        delay: 100,
+        iterationStart: 0.5,
+        fill: 'backwards',
+        easing: 'steps(4, start)',
+      })
+      expect(tx(el)).toBe('translateX(5px)') // step 2 of 4, not 3
+      step(100) // active: the flag is off
+      expect(tx(el)).toBe('translateX(2.5px)')
+    })
+
+    it('keeps a reversed step easing on the lower step after the end', () => {
+      const {el} = start({
+        duration: 100,
+        direction: 'reverse',
+        iterationStart: 0.5,
+        fill: 'forwards',
+        easing: 'steps(4, start)',
+      })
+      step(100)
+      expect(tx(el)).toBe('translateX(5px)') // step 2 of 4, not 3
+    })
+
+    it('keeps the end value with `fill: forwards` without ticking on', () => {
+      const {scope, el} = start({
+        duration: 100,
+        direction: 'reverse',
+        fill: 'forwards',
+      })
+      step(100)
+      expect(tx(el)).toBe('translateX(10px)')
+      expect(finishedOf(scope)).toHaveLength(0)
+      // The frame already scheduled finds nothing running and schedules no more:
+      step(16)
+      expect(tx(el)).toBe('translateX(10px)')
+      expect(frames).toHaveLength(0)
+    })
+
+    it('resolves `finished` only after `endDelay`', () => {
+      const {scope, el} = start({duration: 100, endDelay: 100})
+      step(100)
+      expect(tx(el)).toBe('')
+      expect(finishedOf(scope)).toHaveLength(1)
+      step(100)
+      expect(finishedOf(scope)).toHaveLength(0)
+    })
   })
 })

@@ -1,4 +1,5 @@
-export type EasingFn = (t: number) => number
+// `before` is WAAPI's before flag, which only step easings read:
+export type EasingFn = (t: number, before?: boolean) => number
 
 export type EasingInfo = {
   fn: EasingFn
@@ -124,23 +125,29 @@ const parseLinearBody = (body: string): EasingInfo | null => {
   }
 }
 
+// The step easing function of the CSS Easing spec. With the before flag set
+// (the before phase going forwards, or the after phase going backwards) an
+// input on an exact step boundary gives the step below:
 const steps =
   (count: number, position: string): EasingFn =>
-  (t) => {
-    if (t >= 1) return 1
-    if (t <= 0) return 0
-    const step = Math.floor(t * count)
-    switch (position) {
-      case 'start':
-      case 'jump-start':
-        return Math.min(1, (step + 1) / count)
-      case 'jump-none':
-        return Math.min(1, step / (count - 1))
-      case 'jump-both':
-        return (step + 1) / (count + 1)
-      default: // end / jump-end
-        return step / count
-    }
+  (t, before = false) => {
+    let step = Math.floor(t * count)
+    if (
+      position === 'start' ||
+      position === 'jump-start' ||
+      position === 'jump-both'
+    )
+      step++
+    if (before && (t * count) % 1 === 0) step--
+    if (t >= 0 && step < 0) step = 0
+    const jumps =
+      position === 'jump-none'
+        ? count - 1
+        : position === 'jump-both'
+          ? count + 1
+          : count
+    if (t <= 1 && step > jumps) step = jumps
+    return step / jumps
   }
 
 const bezier = (

@@ -105,3 +105,37 @@ test('keeps digits restored in the render that turns animation off', async ({
   )
   expect(dim).toBe(0)
 })
+
+// Safari 13 의 MediaQueryList 는 EventTarget 이 아니라 addListener 만 있다 (#23):
+test('useCanAnimate subscribes without addEventListener on MediaQueryList', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const matchMedia = window.matchMedia.bind(window)
+    ;(window as any).__addListenerCalls = 0
+    window.matchMedia = (query) => {
+      const mql = matchMedia(query)
+      if (!query.includes('prefers-reduced-motion')) return mql
+      Object.defineProperty(mql, 'addEventListener', {value: undefined})
+      Object.defineProperty(mql, 'removeEventListener', {value: undefined})
+      const addListener = mql.addListener.bind(mql)
+      mql.addListener = (cb) => {
+        ;(window as any).__addListenerCalls++
+        addListener(cb)
+      }
+      return mql
+    }
+  })
+  const consoleErrors: string[] = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text())
+  })
+  page.on('pageerror', (err) => consoleErrors.push(String(err)))
+
+  await page.goto(SSR_URL)
+  await page.waitForFunction(() => (window as any).__addListenerCalls > 0)
+  await expect(page.locator('number-flow-yceffort-react')).toBeVisible()
+
+  const relevant = consoleErrors.filter((e) => !e.includes('favicon'))
+  expect(relevant).toEqual([])
+})

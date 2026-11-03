@@ -129,6 +129,16 @@ export default class NumberFlowLite
     } else finishAll(this)
   }
 
+  disconnectedCallback() {
+    // The rAF engine would otherwise keep ticking, and writing to, a detached
+    // flow until its tweens end (yceffort/number-flow#27). Deferred so that a
+    // flow moved within the document (removed and re-inserted in one task)
+    // keeps animating:
+    Promise.resolve().then(
+      () => this.isConnected || usesNativeEngine() || finishAll(this),
+    )
+  }
+
   readonly created: boolean = false
 
   private _pre?: Section

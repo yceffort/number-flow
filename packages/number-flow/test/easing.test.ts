@@ -65,6 +65,21 @@ describe('parseEasing', () => {
     expect(none(0.5)).toBeCloseTo(0.5, 5)
   })
 
+  // WAAPI's before flag (set in the before phase going forwards and in the
+  // after phase going backwards): on an exact step boundary a step easing
+  // then sits on the step below:
+  it('steps down at exact boundaries when the before flag is set', () => {
+    const start = parseEasing('steps(4, jump-start)')
+    expect(start(0.5)).toBeCloseTo(0.75, 5)
+    expect(start(0.5, true)).toBeCloseTo(0.5, 5)
+    expect(start(0)).toBeCloseTo(0.25, 5) // jumps right at the start
+    expect(start(0, true)).toBe(0)
+    const end = parseEasing('steps(4)')
+    expect(end(1)).toBe(1)
+    expect(end(1, true)).toBeCloseTo(0.75, 5)
+    expect(end(0.3, true)).toBeCloseTo(0.25, 5) // off a boundary: no change
+  })
+
   // steps(1, jump-none) is invalid per spec, and its step/(count-1) would
   // divide by zero and write NaN into inline styles:
   it('never produces NaN, including for steps(1, jump-none)', () => {

@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 
-import {setEngineMode} from '../src/engine'
+import {finishedOf, setEngineMode} from '../src/engine'
 import {formatToData} from '../src/formatter'
 import NumberFlowLite, {canAnimate} from '../src/lite'
 import {opacityDeltaVar} from '../src/styles'
@@ -285,6 +285,42 @@ describe('NumberFlowLite (rAF engine)', () => {
     // And no orphaned tween keeps ticking:
     step(2000)
     expect(yOf(digit, 6)).toBe('')
+  })
+
+  // Regression (yceffort/number-flow#27): the loop kept ticking, and writing
+  // to, a detached flow until its tweens ended:
+  it('finishes its tweens and leaves the loop once detached', async () => {
+    const el = create()
+    set(el, 3)
+    set(el, 7)
+    step(0)
+    expect(finishedOf(el)).not.toHaveLength(0)
+
+    el.remove()
+    await tick()
+    expect(finishedOf(el)).toHaveLength(0)
+    // At rest, as if its animationsfinish had fired:
+    const digit = digits(el)[0]!
+    expect(digit.classList.contains('is-spinning')).toBe(false)
+    expect(yOf(digit, 7)).toBe('')
+    // The frame already scheduled finds nothing left and schedules no more:
+    step(16)
+    expect(frames).toHaveLength(0)
+  })
+
+  it('keeps animating a flow that is moved within the document', async () => {
+    const el = create()
+    set(el, 3)
+    set(el, 7)
+    const wrap = document.createElement('div')
+    document.body.appendChild(wrap)
+    wrap.appendChild(el) // removed and re-inserted in one task
+    await tick()
+    expect(finishedOf(el)).not.toHaveLength(0)
+    step(0)
+    step(450)
+    expect(digits(el)[0]!.classList.contains('is-spinning')).toBe(true)
+    await settle() // drain the loop: the harness drops frames between tests
   })
 
   it('keeps digits and symbols in sync as the number grows and shrinks', async () => {
