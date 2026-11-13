@@ -258,8 +258,17 @@ const NumberFlow = React.forwardRef<NumberFlowElement, NumberFlowProps>(
     const group = React.useContext(NumberFlowGroupContext)
     group?.useRegister(ref)
 
+    // Canonicalize the locales first — Intl.Locale instances have no own
+    // enumerable properties, so JSON.stringify alone would collapse them all
+    // to '{}':
     const localesString = React.useMemo(
-      () => (locales ? JSON.stringify(locales) : ''),
+      () =>
+        locales
+          ? // getCanonicalLocales accepts Intl.Locale per spec; TS lib types lag:
+            JSON.stringify(
+              Intl.getCanonicalLocales(locales as string | string[]),
+            )
+          : '',
       [locales],
     )
     const formatString = React.useMemo(
